@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Calendario · Administración</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script type="module" src="/js/admin/calendar.js"></script>
+  </head>
+  <body data-page="admin-calendar">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/admin">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span><strong>Gestión</strong><small>Administración</small></span>
+        </a>
+        <nav class="nav-links" aria-label="Navegación principal">
+          <a href="/admin">Panel</a>
+          <a href="/admin/citas">Citas</a>
+          <a class="active" href="/admin/calendario">Calendario</a>
+          <a href="/admin/tareas">Tareas</a>
+          <a href="/admin/clientes">Clientes</a>
+        </nav>
+        <div class="topbar-actions">
+          <span class="badge" id="rol-badge">…</span>
+          <div class="notifications" id="notificaciones">
+            <button class="notifications-globe" type="button" aria-expanded="false" aria-label="Notificaciones">🔔<span class="notifications-total" id="notificaciones-total" hidden>0</span></button>
+            <div class="notifications-panel" hidden>
+              <div class="notifications-head">
+                <strong>Notificaciones</strong>
+                <button class="button button-quiet button-sm" id="notificaciones-todas" type="button">Marcar leídas</button>
+              </div>
+              <div class="notifications-list" id="notificaciones-lista"></div>
+            </div>
+          </div>
+          <span class="user-chip" id="user-name">…</span>
+          <button class="button button-quiet button-sm" id="logout-button" type="button">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Administración</p>
+          <h1>Calendario</h1>
+          <p class="muted">Cada horario publicado es una línea, con su cita dentro si la tiene. Publicar horarios nuevos se hace desde el panel.</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="calendar-toolbar">
+          <div class="calendar-actions">
+            <button class="icon-button" id="anterior" type="button" aria-label="Anterior">‹</button>
+            <strong id="periodo-titulo">—</strong>
+            <button class="icon-button" id="siguiente" type="button" aria-label="Siguiente">›</button>
+            <button class="button button-quiet button-sm" id="hoy" type="button">Hoy</button>
+          </div>
+          <div class="calendar-actions">
+            <button class="button button-quiet button-sm" id="vista-mes" type="button">Mes</button>
+            <button class="button button-quiet button-sm" id="vista-semana" type="button">Semana</button>
+          </div>
+        </div>
+
+        <div class="calendar-legend">
+          <span><i class="calendar-mark calendar-mark--cita">3</i> Citas</span>
+          <span><i class="calendar-mark calendar-mark--libre">2</i> Horarios libres</span>
+          <span><i class="calendar-mark calendar-mark--tarea">1</i> Tareas agendadas</span>
+        </div>
+
+        <div id="calendario">
+          <p class="muted">Cargando…</p>
+        </div>
+        <p class="message" id="calendario-message" role="status"></p>
+      </section>
+    </main>
+
+    <!-- Detalle de un día -->
+    <dialog class="modal" id="dia-dialog" aria-labelledby="dia-dialog-title">
+      <div class="modal-body" id="dia-contenido"></div>
+    </dialog>
+
+    <!-- Editar disponibilidad ya publicada. Publicar horarios nuevos se hace
+         desde el panel principal. -->
+    <dialog class="modal" id="hueco-dialog" aria-labelledby="hueco-dialog-title">
+      <form id="hueco-form" method="post" novalidate>
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">Disponibilidad</p>
+            <h2 id="hueco-dialog-title">Editar horario</h2>
+          </div>
+          <button class="icon-button" id="close-hueco-dialog" type="button" aria-label="Cerrar">×</button>
+        </div>
+
+        <input id="hueco-id" type="hidden">
+
+        <div class="form-grid">
+          <label class="field field-wide">
+            <span>Fecha *</span>
+            <input id="hueco-fecha" name="date" type="date" required>
+          </label>
+          <label class="field">
+            <span>Desde *</span>
+            <input id="hueco-inicio" name="startTime" type="time" value="15:00" required>
+          </label>
+          <label class="field">
+            <span>Hasta *</span>
+            <input id="hueco-fin" name="endTime" type="time" value="16:00" required>
+          </label>
+          <label class="field field-wide">
+            <span>Estado</span>
+            <select id="hueco-estado" name="status">
+              <option value="AVAILABLE">Libre (los clientes pueden elegirlo)</option>
+              <option value="BLOCKED">Bloqueado (no se puede reservar)</option>
+            </select>
+          </label>
+          <label class="field field-wide">
+            <span>Nota</span>
+            <input id="hueco-nota" name="note" type="text" maxlength="200" placeholder="Ej: visita de 45 minutos">
+          </label>
+        </div>
+
+        <p class="form-error" id="hueco-error" role="alert" hidden></p>
+
+        <div class="modal-actions">
+          <button class="button button-danger" id="borrar-hueco" type="button">Eliminar</button>
+          <span class="spacer"></span>
+          <button class="button button-quiet" id="cancel-hueco-dialog" type="button">Cancelar</button>
+          <button class="button button-primary" type="submit">Guardar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="detalle-dialog" aria-labelledby="detalle-title"></dialog>
+    <dialog class="modal confirm-modal" id="confirm-dialog" aria-labelledby="confirm-title">
+      <div class="confirm-inner">
+        <div class="modal-heading">
+          <h2 id="confirm-title">Confirmar</h2>
+          <button class="icon-button" id="close-confirm" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <p class="confirm-text" id="confirm-text"></p>
+        <p class="confirm-warn" id="confirm-aviso"></p>
+        <p class="message" id="confirm-message" role="status"></p>
+        <div class="modal-actions">
+          <button class="button button-quiet" id="cancel-confirm" type="button">Cancelar</button>
+          <button class="button button-danger" id="accept-confirm" type="button">Aceptar</button>
+        </div>
+      </div>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>
