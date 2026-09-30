@@ -15,6 +15,9 @@ const masDias = (n) => {
 
 let fallos = 0;
 let paso = 0;
+// Un fallo de ejecucion no es lo mismo que una comprobacion fallida: si el
+// escenario se cae a mitad, el recuento de las 30 no significa nada.
+let falloDeEjecucion = false;
 
 function ok(etiqueta, condicion, detalle) {
   paso += 1;
@@ -316,6 +319,12 @@ try {
 
   const adminRuta = await pedir("/api/clients", { token: clienteToken });
   ok("30c. un cliente no entra en rutas de administración", adminRuta.estado === 403, `estado ${adminRuta.estado}`);
+} catch (error) {
+  // El finally limpia pero no tapa: el error real se imprime despues, no en su
+  // lugar. Antes un fallo de limpieza desplazaba al escenario entero y no se
+  // veia ni una de las 30 comprobaciones.
+  falloDeEjecucion = true;
+  console.error(`\nEl escenario no pudo terminar: ${error?.message || error}`);
 } finally {
   /* Limpieza: el escenario no deja basura en la base de datos. */
   console.log("\nLimpiando datos del escenario…");
@@ -325,12 +334,19 @@ try {
   // Cada cita arrastra una tarea, y la tarea sin fecha del punto 23 también se
   // queda. Sin borrarlas, cada ejecución dejaría basura en la lista de trabajo
   // del administrador, que es justo lo que estas pruebas deben dejar intacto.
-  const { prisma } = await import("../src/config/database.js");
-  await prisma.task.deleteMany({
-    where: { id: { in: tareasCreadas.filter(Boolean) }, appointments: { none: {} } }
-  });
-  await prisma.task.deleteMany({ where: { id: tareaSinFechaId, appointments: { none: {} } } });
-  await prisma.$disconnect();
+  //
+  // Todo esto va en su propio try: si la limpieza falla, el error que importa
+  // es el del escenario, y uno de limpieza por encima lo esconde.
+  const idsTareas = [...tareasCreadas, ...(tareaSinFechaId ? [tareaSinFechaId] : [])].filter(Boolean);
+  if (idsTareas.length > 0) {
+    try {
+      const { prisma } = await import("../src/config/database.js");
+      await prisma.task.deleteMany({ where: { id: { in: idsTareas }, appointments: { none: {} } } });
+      await prisma.$disconnect();
+    } catch (error) {
+      console.warn(`  (la limpieza de tareas ha fallado: ${error.message.split("\n")[0]})`);
+    }
+  }
 
   for (const hueco of idsDisponibilidades.filter(Boolean)) {
     await pedir(`/api/availability/${hueco}`, { metodo: "DELETE", token: adminToken });
@@ -341,5 +357,13 @@ try {
   console.log("Listo.");
 }
 
-console.log(`\n== ${fallos === 0 ? "ESCENARIO COMPLETO CORRECTO" : `${fallos} COMPROBACIONES FALLIDAS`} ==\n`);
-process.exit(fallos === 0 ? 0 : 1);
+console.log(`\n== ${escenarioPasado() ? "ESCENARIO COMPLETO CORRECTO" : `${fallos} COMPROBACIONES FALLIDAS`} ==\n`);
+process.exit(fallos === 0 && !falloDeEjecucion ? 0 : 1);
+
+/**
+ * El escenario solo pasa si las 30 comprobaciones estan bien y ademas ha
+ * llegado al final. Un recuento parcial con una caida a mitad no es un verde.
+ */
+function escenarioPasado() {
+  return fallos === 0 && !falloDeEjecucion;
+}

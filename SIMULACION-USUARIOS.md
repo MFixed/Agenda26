@@ -8,7 +8,7 @@
 
 Esto es una **simulación**: personas ficticias que yo he construido combinando cómo
 trabajan realmente estos oficios en España con lo que la aplicación hace y no hace
-ahora mismo. **No es investigación de mercado.** Nadie ha interviewed a nadie.
+ahora mismo. **No es investigación de mercado.** Nadie ha hablado con nadie.
 
 Hay dos cosas que sí son reales y conviene no confundir con la simulación:
 
@@ -21,8 +21,9 @@ Y una cosa que es real pero fácil de olvidar:
 
 > **El mayor riesgo de este documento es que lo presentes como estudio de mercado.**
 > Si lo enseñas a un socio, a un inversor o a un cliente y lo tomas por datos
->调研, estás tomando decisiones sobre ficción. Para eso está el §9, que explica cómo
-> sustituir esta simulación por datos de verdad: cuesta unos 400 € y dos semanas.
+> de investigación, estás tomando decisiones sobre ficción. Para eso está el
+> §9, que explica cómo sustituir esta simulación por datos de verdad: cuesta
+> unos 400 € y dos semanas.
 
 Lo que sí sirve: **hizo pensar el producto desde el lado de quien lo paga**,
 que es donde suelen aparecer los huecos que el dueño de la aplicación no ve
@@ -41,7 +42,7 @@ porque ya conoce el código.
 | 3 | Fisioterapia | 2 | 60 | 3 camillas | 55 €/sesión |
 | 4 | Psicología | 2 | 50 | consulta individual | 70 €/sesión |
 | 5 | Pilates y yoga | 1 | 45 | estudio con clases | 20 €/clase |
-| 6 | Taller de vehículos | 1 | 35 | 4_boxes | 180 €/reparación |
+| 6 | Taller de vehículos | 1 | 35 | 4 boxes | 180 €/reparación |
 | 7 | Contabilidad y asesoría | 1 | 30 | despacho de 3 | 180 €/mes |
 | 8 | Bufete de abogados | 1 | 25 | 2 abogados | 150 €/consulta |
 | 9 | Veterinaria | 1 | 20 | clínica pequeña | 70 €/visita |
@@ -65,12 +66,12 @@ que uno que encaja en el 100 %.
 > recuerde llamar.»
 
 > «Lo que más me disgusta es que cuando yo bloqueo una silla para una tarde, tengo
-> que bloquear veinte horarios sueltos. Y las vacaciones las tengo queTeclear.»
+> que bloquear veinte horarios sueltos. Y las vacaciones las tengo que teclear.»
 
 **Veredicto:** compraría **si** puede bloquear la tarde entera de golpe y si
 llegara un aviso por WhatsApp. Sin esas dos cosas, me quedo con la libreta.
 
-**Lo que le sobra:** la ficha del cliente. De dónde vino y qué合同的 me da igual.
+**Lo que le sobra:** la ficha del cliente. De dónde vino y qué contrató me da igual.
 
 ---
 
@@ -81,14 +82,14 @@ llegara un aviso por WhatsApp. Sin esas dos cosas, me quedo con la libreta.
 
 **Veredicto:** no usaría nada, y **esto señala el fallo más grave de la
 aplicación**: el enum `Role` sólo tiene `ADMIN` y `CLIENT`. No hay un rol
-"profesional". Hoy laDueña de un salón con tres sillas sólo puede ser ella.
+"profesional". Hoy la dueña de un salón con tres sillas sólo puede ser ella.
 
 ---
 
 **Nuria, 38, peluquera autónoma (ADMIN)**
 
 > «Soy una persona. Una agenda y un móvil. Si me obligas a tener ordenador, no lo
-> tengo. Y no quiero杀 más de cinco minutos al día en esto.»
+> tengo. Y no quiero gastar más de cinco minutos al día en esto.»
 
 **Veredicto:** dudaría. Paga 25 €/mes como mucho, **sólo si funciona entero en el
 móvil**. Hoy la aplicación es responsive, pero probar cinco minutos de uso real
@@ -100,7 +101,7 @@ en un móvil sin ratón es un problema serio que no sé cómo está resuelto.
 
 **Dra. Selma, 44 (ADMIN)**
 
-> «Un paciente que no viene a una limpieza de Scaling es un paciente que no
+> «Un paciente que no viene a un raspado es un paciente que no
 > vuelve. Eso son 120 euros. Necesito el recordatorio, no la agenda.»
 
 > «Y necesito el historial. Si un paciente va a otro profesional de mi clínica,
@@ -112,8 +113,9 @@ necesito historia clínica, consentimiento firmado y facturación electrónica.
 Son tres módulos que no existen.
 
 **Aportación útil:** el motivo por el que el sector dental paga 29-89 €/mes
-(§6) no es la agenda. Es VeriFactu y el consentimiento. Quien clone esta
-aplicación para部和 tiene que saber que está vendiendo la mitad del producto.
+(§6) no es la agenda. Es VeriFactu y el consentimiento. Quien use esta
+aplicación para consultas tiene que saber que está vendiendo la mitad del
+producto.
 
 ---
 
@@ -140,14 +142,14 @@ aplicación para部和 tiene que saber que está vendiendo la mitad del producto
 
 **Beatriz, 46, psicóloga clínica (ADMIN)**
 
-> «Mi agenda es fifty horas de terapia por semana y un paciente que llama a las
+> «Mi agenda es cincuenta horas de terapia por semana y un paciente que llama a las
 > ocho de la tarde para cambiar una cita. Lo que necesito no es un calendario,
 > es un límite de sesiones.»
 
 > «Y una cosa que no te digo a la ligera: no me vale con que los datos estén en
-> un servidor tuyo en Francia. Lo digo por el RGPD de salud, y por que un paciente
-> que ha pasado por())),
->te，都 tiene derecho a saber dónde está su historia.»
+> un servidor tuyo en otro país. Lo digo por el RGPD de salud, y porque un
+> paciente que ha pasado por tu consulta tiene derecho a saber dónde está
+> su historia.»
 
 **Veredicto:** dudaría. Pagaría 15-20 €/mes por la agenda, pero el día que metiera
 historia clínica el precio sube a 40. **Compraría hoy, con miedo.**
@@ -196,7 +198,7 @@ el tamaño del negocio: es si el trabajo cabe en un hueco de reloj.
 **Pilar, 55, asesora fiscal (ADMIN)**
 
 > «Yo no vendo horas, vendo **plazos**. Antes del 20 de marzo tengo que tener
->presented laRental de 30 empresas. Mi agenda actual me dice cuándo tengo
+> presentada la Rental de 30 empresas. Mi agenda actual me dice cuándo tengo
 > cita, que no es lo que necesito.»
 
 > «Y a mí no me vas a cobrar 99 euros al mes. Yo pago tres mil al año de licencia
@@ -221,9 +223,9 @@ otra cosa. Ver §6, sobre por qué el precio tiene que ser *por módulo*.
 > avisa, no hay conversación. Si no, la tengo igual y me llevo un disgusto.»
 
 **Veredicto:** no compraría. Necesita plazos y alertas de vencimiento, que es un
-gestor de tareas con Recordatorios, no un calendario de citas.
+gestor de tareas con recordatorios, no un calendario de citas.
 
-**Matiz兌 muy bueno:** esta persona **sí** usaría la gestión de tareas si
+**Matiz muy bueno:** esta persona **sí** usaría la gestión de tareas si
 existiera la alerta. Es un recordatorio que el producto no tiene. Es el hueco más
 barato de cerrar de toda la lista (§7, P1-4).
 
@@ -251,7 +253,7 @@ tiene un "hueco de urgencia" abierto a la vez que la agenda.
 > informe. Lo que necesito es: un checklist, una fecha límite y que se me avise.»
 
 **Veredicto:** no compraría como herramienta de gestión. **Compraría un módulo de
-tareas con Recordatorio y alertas** si costase 9 €/mes suelto.
+tareas con recordatorios y alertas** si costase 9 €/mes suelto.
 
 **Conclusión estratégica:** la gestión de tareas con avisos es un producto
 distinto, más pequeño y más vendible que el calendario, y sirve a rubros que
@@ -285,7 +287,7 @@ Tercero, cinco de quince:
 > **«Me da miedo meter datos aquí dentro.»**
 
 Sin cifrado en reposo, sin registro de accesos, sin copia de seguridad
-configurable y sin contrato de encargado del tratamiento. Nadie lo haح试
+configurable y sin contrato de encargado del tratamiento. Nadie lo ha probado,
 probado, pero es lo primero que se pregunta en psicología y en dentistry.
 
 ---
@@ -296,8 +298,8 @@ Un dato útil que rara vez sale en las entrevistas reales: **también hay
 rechazos**.
 
 - **Rita, peluquería:** «La ficha del cliente no me vale. De dónde vino y qué
- 断了 me dio me da igual.» El modelo `Client` tiene documento, fecha de
-  nacimiento y dirección, campos que una peluquería rellena por custom y no usa
+  contrató me da igual.» El modelo `Client` tiene documento, fecha de
+  nacimiento y dirección, campos que una peluquería rellena por obligación y no usa
   nunca. En cambio, lo que sí necesita —alergias, fórmula de color, largo
   anterior— no existe.
 - **Pilar, asesoría:** «Una cita con un cliente que me manda un burofax es una
@@ -318,7 +320,7 @@ rechazos**.
 | # | Limitación | Dónde está | Rubos afectados | Dinero en juego |
 |---|---|---|---|---|
 | 1 | **No hay rol de profesional.** Sólo `ADMIN` y `CLIENT` | `schema.prisma:33` | peluquería, dental, fisio, estudio | **Bloqueante** en 4 de 10 |
-| 2 | **Avisos sólo dentro de la app**, nunca proactive | `notification.service.js:72,81` | los 10 | **Bloqueante** en 7 de 10 |
+| 2 | **Avisos sólo dentro de la app**, nunca proactivos | `notification.service.js:72,81` | los 10 | **Bloqueante** en 7 de 10 |
 | 3 | **No hay cita seriada** ("15 sesiones, mismo día y hora") | — | fisio, psi, dental, terapia | El rubro con mayor recurrencia |
 | 4 | **No hay facturación ni VeriFactu** | — | todos | Obligación legal en 2027 |
 | 5 | **La categoría no tiene precio ni duración** | `schema.prisma:102` | peluquería, dental, fisio | No se puede cerrar la cita |
@@ -411,7 +413,8 @@ es la primera pregunta que hace cualquiera.
 de salud miden en usuarios (8 €/empleado en Booksy, 9,90 € en moodo, 9,99 € en
 Profisio) y **sólo** en dos casos en pacientes (PsicoGest, 15-30 pacientes).
 Meter la factura en el número de clientes castiga justo al peluquero de 100
-clientas, que es el rubro que más facturaría y el que peor对待 con ese criterio.
+clientas, que es el rubro que más facturaría y el que peor sale tratado con
+ese criterio.
 
 ### 6.3 · Lo que pagarían las personas simuladas
 
@@ -450,10 +453,10 @@ Clinical      69 €    lo anterior + ficha ampliada + series + VeriFactu
 
 Con tres ajustes deliberados:
 
-- **Gratis de verdad, no de prueba.** PeluCan y My Psico Agenda ya publican el
-  nivel gratuito. Un autónomo de un silla que se registra, ve que no le sirve y
-  se va, no deja más que un correo. Uno que se registra y se queda es un cliente
-  dentro de seis meses.
+- **Gratis de verdad, no de prueba.** Clientisima y My Psico Agenda ya publican el
+  nivel gratuito. Un autónomo de un solo sillón que se registra, ve que no le
+  sirve y se va, no deja más que un correo. Uno que se registra y se queda es un
+  cliente dentro de seis meses.
 - **El escalón de 19 € es el de sólo agenda**, y es el producto completo de lo
   que existe hoy. Se puede vender mañana.
 - **El salto de 39 € se justifica con el rol de profesional** (P0-1), no con
@@ -478,11 +481,11 @@ precio y duración, bloqueo de rangos) los rubros que hoy no compran pasan a och
 de diez, y el plan de 39 € entra en juego: el MRR de 12 meses se acerca a los
 **2.300 €**, todavía con un solo desarrollador y sin facturación ajena.
 
-**El número que importa no es ese.** Con 11 businesses de 1.550 € de MRR, el
+**El número que importa no es ese.** Con 24 suscriptores y 1.550 € de MRR, el
 ingreso no paga un segundo desarrollador. El producto no se sostiene con
-suscripciones a autónomos pequeños: se sostiene vendiendo a estudios de 3-6
-profesionales que aún no existen como caso de uso, o񟿿hijo vendiendo a empresas
-de servicios con los que ya se habla. Ambos caminos exigen el P0-1 antes que nada.
+suscripciones a autónomos pequeños: se sostiene vendiendo a estudios de 3 a 6
+profesionales que aún no existen como caso de uso, o bien vendiendo a empresas
+de servicios con las que ya se habla. Ambos caminos exigen el P0-1 antes que nada.
 
 ---
 
@@ -496,7 +499,7 @@ visibilidad en `listarCitas`, `listarTareas` y `listarDisponibilidades` idéntic
 que ya existe para el cliente. El filtro ya está escrito en
 `listarCitas` (`appointment.service.js:80`): es copiar el patrón, no inventarlo.
 **Desbloquea:** peluquerías, clínicas, estudios, despachos con equipo. Es el
-motivo por el que 4 de 15 no pueden usar la aplicación hoy.
+motivo por el que 4 de 10 rubros no pueden usar la aplicación hoy.
 
 **P0-2 · Avisos fuera de la aplicación.**
 El enum `NotificationChannel` ya tiene `EMAIL` y `WHATSAPP`. Falta un worker que
@@ -508,13 +511,13 @@ competidor.
 **P0-3 · Categorías con precio y duración.**
 Dos columnas en `Category` y dos en el formulario. Con eso la ficha de la cita
 deja de ser un texto libre y pasa a decir "Corte de pelo · 30 min · 28,50 €".
-**Desbloquea:** cerrar la cita, calcular el día, ySerializer cómo se factura.
+**Desbloquea:** cerrar la cita, calcular el día y saber cuánto se factura.
 
 **P0-4 · Bloqueo de rangos.**
 Hoy `crearDisponibilidad` hace un horario suelto. Un "bloquear del lunes al
 viernes de 16:00 a 20:00" son veinte llamadas a la API. Se escribe en 40 líneas
 con un bucle sobre `crearDisponibilidad` y un endpoint nuevo.
-**Desbloquea:** vacaciones, Disposable, mantenimiento. Lo más pedido en cada demo.
+**Desbloquea:** vacaciones, festivos, mantenimiento. Lo más pedido en cada demo.
 
 ### P1 — lo que convierte un cliente de 19 € en uno de 69 €
 
@@ -546,7 +549,7 @@ segundos del camino más crítico del producto.
 solicitudes por minuto de sobra para un negocio pequeño. Motivo de baja número
 uno en la industria.
 
-### P2 —议 lo que diferencia
+### P2 — Lo que diferencia
 
 Reservas en bloque y lista de espera (estudios, talleres) · sin(recordatorios
 email y WhatsApp) · plantillas de nota por tipo de servicio · informe de
@@ -619,10 +622,13 @@ entera y descubrir que nadie la quiere— cuesta seis meses.
 
 ### Qué mirar
 
-- **Más del 50 % de losefn Cited en el mismo olvido en más de 3 de 15 personas:** es real, constrúyelo.
-- **Un olvido mencionado por 1 o 2:** interesante pero no es un plan de negocio.
-- **Una Ancient Queja sobre un tarea que NO has priorizado:** lo has priorizado mal.
-- **Un precio que se menciona tres veces en la misma frase:** la respuesta más valiosa de todas. Pilar lo dijo: *"A 49 € me parece un chollo, a 300 € te contesto el teléfono."* Eso no es un deseo, es una frontera.
+- **Más del 50 % de las personas se quejan de lo mismo en más de 3 de 15
+  casos:** es real, constrúyelo.
+- **Una queja mencionada por 1 o 2:** interesante, pero no es un plan de negocio.
+- **Una queja sobre algo que NO has priorizado:** lo has priorizado mal.
+- **Un precio que se menciona tres veces en la misma frase:** la respuesta más
+  valiosa de todas. Pilar lo dijo: *"A 49 € me parece un chollo, a 300 € te
+  contesto el teléfono."* Eso no es un deseo: es una frontera.
 
 ---
 
@@ -631,9 +637,9 @@ entera y descubrir que nadie la quiere— cuesta seis meses.
 1. **La aplicación es buena gestionando citas y no avisando.** Es justo lo
    contrario de lo que necesita el 70 % de estos rubros.
 2. **El bloqueo de mayor tamaño es que no existe el rol de profesional.**
-   While no exista, cuatro de cada diez rubros no pueden usarla, y son los que
-   más clientes tienen. Es una migración de una tabla y un filtro que ya está
-   escrito.
+   Mientras no exista, cuatro de cada diez rubros no pueden usarla, y son los
+   que más clientes tienen. Es una migración de una tabla y un filtro que ya
+   está escrito.
 3. **El mercado paga entre 19 € y 35 € a un profesional independiente, escala
    por número de profesionales, cobra sin comisión y ofrece prueba gratuita.**
    Cualquier plan que se salga de eso necesita una función que el cliente pueda

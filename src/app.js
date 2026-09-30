@@ -1,6 +1,7 @@
 import express from "express";
 import path from "node:path";
 import { config } from "./config/index.js";
+import { healthRoutes } from "./routes/health.routes.js";
 import { authRoutes } from "./routes/auth.routes.js";
 import { clientRoutes } from "./routes/client.routes.js";
 import { categoryRoutes } from "./routes/category.routes.js";
@@ -32,6 +33,7 @@ export function crearApp() {
   app.use(express.json({ limit: "64kb" }));
 
   // API
+  app.use("/api/health", healthRoutes);
   app.use("/api/auth", authRoutes);
   app.use("/api/clients", clientRoutes);
   app.use("/api/categories", categoryRoutes);

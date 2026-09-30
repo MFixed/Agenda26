@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { prisma } from "../config/database.js";
+import { enTransaccion, prisma } from "../config/database.js";
 import { conflicto, noAutorizado, noEncontrado, prohibido } from "../utils/http.js";
 import { hashPassword, verifyPassword } from "../utils/password.js";
 import { aMedianocheUTC } from "../utils/date.js";
@@ -11,7 +11,12 @@ function passwordTemporal() {
 
 /**
  * Listado con búsqueda por nombre, documento, teléfono o correo.
- * El término escapa la diferencia entre mayúsculas de SQLite con `mode`.
+ *
+ * `mode: "insensitive"` lo traduce a ILIKE, que ignora mayúsculas y acentos.
+ * OJO: Prisma sólo acepta ese argumento en PostgreSQL y MongoDB. Con el
+ * conector de SQLite lanza `Unknown argument 'mode'` y la búsqueda entera
+ * revienta, y no es un fallo que se viera: con SQLite estaba rota desde el
+ * principio y no lo probaba ninguna prueba. Hay una ahora, en api.test.js.
  */
 export async function listarClientes({ q, limit, offset }) {
   const where = q ? { OR: condicionesDeBusqueda(q) } : undefined;
@@ -237,6 +242,17 @@ export function exigirNoEsAdmin(usuario) {
 /**
  * Borra un cliente y su usuario. El admin no puede borrarse a sí mismo y no se
  * puede dejar la aplicación sin ningún administrador activo.
+ *
+ * OJO CON LAS TAREAS
+ * Al borrar el usuario cae en cascada el cliente, y con él sus citas. Pero
+ * Task.clientId está en SetNull, así que las tareas NO se borran: quedan
+ * huérfanas, sin cliente y sin cita, y el administrador las ve aparecer en
+ * "Mis tareas" sin saber de dónde salieron. Cada cliente eliminado plantaba una
+ * bolsa de tareas zombis en su lista de trabajo.
+ *
+ * Aquí se limpian las que nacieron de sus citas. Las que el administrador creó a
+ * mano y le asignó se conservan: son trabajo suyo, no de las citas, y borrar una
+ * tarea que nadie pidió borrar sería peor que el problema que se arregla.
  */
 export async function eliminarCliente(id, usuarioActual) {
   const cliente = await obtenerCliente(id);
@@ -246,8 +262,24 @@ export async function eliminarCliente(id, usuarioActual) {
   if (cliente.user.activo && (await contarAdminsActivos()) === 0) {
     throw conflicto("No puedes eliminar la última cuenta de administración.");
   }
-  await prisma.user.delete({ where: { id: cliente.userId } });
-  return cliente;
+
+  return enTransaccion(async (tx) => {
+    // Se recogen antes de borrar, porque después ya no hay citas que mirar.
+    const citas = await tx.appointment.findMany({ where: { clientId: id }, select: { taskId: true } });
+    const tareasDeSusCitas = [...new Set(citas.map((cita) => cita.taskId))];
+
+    await tx.user.delete({ where: { id: cliente.userId } });
+
+    // Para entonces las citas ya no existen, así que "sin citas" selecciona
+    // exactamente las tareas que se han quedado sueltas.
+    if (tareasDeSusCitas.length > 0) {
+      await tx.task.deleteMany({
+        where: { id: { in: tareasDeSusCitas }, appointments: { none: {} } }
+      });
+    }
+
+    return cliente;
+  });
 }
 
 async function contarAdminsActivos() {

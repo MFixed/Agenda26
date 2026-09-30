@@ -1,4 +1,4 @@
-import { prisma } from "../config/database.js";
+import { enTransaccion, prisma } from "../config/database.js";
 import { conflicto, noEncontrado, prohibido } from "../utils/http.js";
 import { formatearFechaES, hoyISO } from "../utils/date.js";
 import { avisarAdmins, crearNotificacion } from "./notification.service.js";
@@ -13,9 +13,13 @@ import { avisarAdmins, crearNotificacion } from "./notification.service.js";
  *     UPDATE Availability SET status='HELD' WHERE id=? AND status='AVAILABLE'
  *
  * dentro de una transacción. Si otra petición cambió el estado antes, el UPDATE
- * no afecta a ninguna fila y la segunda reserva falla. Es un compare-and-swap, y
- * SQLite serializa las escrituras, así que dos clientes simultáneos no pueden
- * quedarse con el mismo hueco.
+ * no afecta a ninguna fila y la segunda reserva falla.
+ *
+ * Es un compare-and-swap, y con PostgreSQL el guarantee viene del bloqueo de
+ * fila: si dos transacciones intentan el UPDATE a la vez, la segunda espera a que
+ * la primera confirme, y al reevaluar su WHERE ya encuentra status='HELD', así
+ * que no actualiza nada. El UPDATE condicional es lo que da la garantía; la
+ * transacción es lo que la cierra. Por eso los dos van juntos.
  *
  * Por eso Appointment.availabilityId NO lleva UNIQUE: un hueco rechazado o
  * cancelado tiene que poder volver a reservarse.
@@ -162,7 +166,7 @@ export async function obtenerClienteDeUsuario(userId) {
  * pueda ocuparlo mientras se revisa. Todo en una transacción (§25).
  */
 export async function solicitarCita({ cliente, availabilityId, categoryId, title, note, actorId }) {
-  return prisma.$transaction(async (tx) => {
+  return enTransaccion(async (tx) => {
     const disponibilidad = await tx.availability.findUnique({ where: { id: availabilityId } });
     if (!disponibilidad) {
       throw noEncontrado("El horario ya no existe.");
@@ -235,7 +239,7 @@ export async function crearCitaDeAdmin({
   status,
   actorId
 }) {
-  return prisma.$transaction(async (tx) => {
+  return enTransaccion(async (tx) => {
     const cliente = await tx.client.findUnique({ where: { id: clientId } });
     if (!cliente) {
       throw noEncontrado("El cliente no existe.");
@@ -318,7 +322,7 @@ async function resolverCategoria(tx, categoryId) {
  * avisar. Si algo falla, no queda nada a medias.
  */
 export async function cambiarEstadoCita({ citaId, nuevoEstado, actorId, note = null }) {
-  return prisma.$transaction(async (tx) => {
+  return enTransaccion(async (tx) => {
     const cita = await tx.appointment.findUnique({
       where: { id: citaId },
       include: { client: true, availability: true, task: true }
@@ -402,7 +406,7 @@ function mensajeParaCliente(cita, nuevoEstado) {
 
 /** El cliente cancela su propia cita pendiente y el hueco vuelve a quedar libre. */
 export async function cancelarCitaDelCliente({ citaId, clienteId, actorId }) {
-  return prisma.$transaction(async (tx) => {
+  return enTransaccion(async (tx) => {
     const cita = await tx.appointment.findUnique({
       where: { id: citaId },
       include: { client: true, availability: true, task: true }
@@ -449,7 +453,7 @@ export async function cancelarCitaDelCliente({ citaId, clienteId, actorId }) {
 
 /** El administrador reprograma: libera el hueco viejo y ocupa el nuevo, en una transacción. */
 export async function reprogramarCita({ citaId, availabilityId, actorId, note = null }) {
-  return prisma.$transaction(async (tx) => {
+  return enTransaccion(async (tx) => {
     const cita = await tx.appointment.findUnique({
       where: { id: citaId },
       include: { client: true, availability: true, task: true }
@@ -514,7 +518,7 @@ export async function reprogramarCita({ citaId, availabilityId, actorId, note = 
 
 /** Ajuste de la anotación, sin tocar el estado. */
 export async function editarCita({ citaId, cambios, actorId }) {
-  return prisma.$transaction(async (tx) => {
+  return enTransaccion(async (tx) => {
     const cita = await tx.appointment.findUnique({ where: { id: citaId } });
     if (!cita) {
       throw noEncontrado("La cita no existe.");
@@ -546,7 +550,7 @@ export async function editarCita({ citaId, cambios, actorId }) {
 
 export async function eliminarCita(id) {
   const cita = await obtenerCita(id);
-  return prisma.$transaction(async (tx) => {
+  return enTransaccion(async (tx) => {
     await tx.availability.updateMany({
       where: { id: cita.availabilityId, status: { in: ["HELD", "RESERVED"] } },
       data: { status: "AVAILABLE" }

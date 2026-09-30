@@ -8,24 +8,54 @@ decide el panel es el rol de la cuenta.
 
 ## Arranque
 
+Hace falta **PostgreSQL**. No hay modo SQLite: el proveedor del esquema es
+`postgresql` y el código usa `mode: "insensitive"` en la búsqueda de clientes,
+que Prisma sólo acepta en PostgreSQL y MongoDB.
+
+### Con Docker (lo más rápido)
+
 ```bash
-npm install
-npx prisma migrate dev     # crea prisma/dev.db
-npx prisma db seed         # datos de ejemplo deterministas
-npm run dev                # http://localhost:3000
+docker run -d --name agenda-postgres \\
+  -e POSTGRES_PASSWORD=agenda123 \\
+  -e POSTGRES_DB=agenda \\
+  -p 5432:5432 postgres:17
+
+cp .env.example .env      # y pon la URL de abajo
 ```
 
-## Cuentas del seed
+Y en `.env`:
 
-| Rol | Correo | Contraseña |
+```bash
+DATABASE_URL="postgresql://postgres:agenda123@localhost:5432/agenda"
+```
+
+### Con PostgreSQL instalado en Windows
+
+Igual, pero sin la primera línea. La URL va con la contraseña y el puerto que
+hayas puesto al instalar.
+
+### Puesta en marcha
+
+```bash
+npm install
+npm run prisma:generate   # genera el cliente; el motor es específico del sistema
+npm run prisma:deploy     # crea las tablas
+npm run db:seed           # datos de ejemplo
+npm run dev               # http://localhost:3000
+```
+
+**`prisma:generate` es obligatorio y no es opcional.** El motor de Prisma
+descarga un binario para el sistema operativo, así que el que se genera en
+Windows no vale en Linux. Si despliegas sin regenerar, en el servidor falla con un
+error de motor que no tiene nada que ver con tu código.
+
+### Cuentas del seed
+
+| Correo | Contraseña | Rol |
 | --- | --- | --- |
-| Administración | `admin@ejemplo.com` | `Admin1234` |
-| Cliente | `ana@ejemplo.com` | `Cliente1234` |
-| Cliente | `luis@ejemplo.com` | `Cliente1234` |
-
-Cámbialas en cuanto entres. Para crear otro administrador, edita `prisma/seed.js`
-o da de alta un cliente desde el panel y cambia su rol en la base de datos.
-
+| `admin@ejemplo.com` | `Admin1234` | administración |
+| `ana@ejemplo.com` | `Cliente1234` | cliente |
+| `luis@ejemplo.com` | `Cliente1234` | cliente |
 ## Rutas
 
 | Ruta | Quién |
@@ -105,6 +135,7 @@ milisegundos epoch, que es lo que permite ordenar y filtrar por fecha.
 
 | Método y ruta | Acceso |
 | --- | --- |
+| `GET /api/health` | público (estado y diagnóstico; 503 si la base falla) |
 | `POST /api/auth/register` | público (siempre `role: CLIENT`) |
 | `POST /api/auth/login` | público |
 | `POST /api/auth/logout` | sesión |
@@ -160,10 +191,191 @@ el frontend.
 expuesto a XSS. Si el despliegue lo permite, muévelo a una cookie `HttpOnly` +
 `SameSite=Strict`; el resto de la estructura se mantiene igual.
 
+# Despliegue en Render
+
+Hay un `render.yaml` en la raíz. Si lo apuntas en **Dashboard > New > Blueprint**,
+Render se configura solo. Antes hay que crear la base de datos en el panel
+(**New > Postgres**) con el nombre que aparece abajo en el fichero.
+
+### La base ya está creada y migrada
+
+`prisma/migrations/20260930124037_inicial_postgresql` está aplicada en la base de
+Render: 8 tablas, 5 enums, 22 índices, 7 claves foráneas con ON DELETE CASCADE y
+el UNIQUE de `(date, startTime)`. **Sube el repositorio tal cual: no vuelvas a
+borrar las migraciones ni a ejecutarlas a mano**, que si no la base y el historial
+se desincronizan.
+
+### La contraseña no va en el repositorio
+
+Está en `.env`, que está en el `.gitignore` y no se sube. En Render la URL la
+rellena el propio `render.yaml` con `fromDatabase`, así que **tampoco hay que
+pegarla en el panel**.
+
+Y dicho esto, que es lo importante: **cambia esa contraseña antes de nada.** Ha
+ido escrita en un chat, en el log de un despliegue y en el `.env` de tu máquina.
+En el panel, *Settings → Database*, o.reset* la base y te dará una nueva. Es
+sano hacerlo ahora, con la base recién creada y sin datos que perder.
+
+### La URL de Render Postgres no vale tal cual
+
+Render entrega la conexión pelada:
+
+```
+postgresql://usuario:clave:dgrc-xxxxx/gestion
+```
+
+Faltan dos parámetros, y sin ellos falla o se agota:
+
+| Parámetro | Por qué |
+|---|---|
+| `?sslmode=require` | Render exige TLS |
+| `&connection_limit=1` | El plan gratuito limita las conexiones y Prisma abre un pool por defecto que las agota |
+
+Con `fromDatabase` en el `render.yaml` no hay que pegar la URL: Render añade lo
+que hace falta. Si la escribes a mano, con esos parámetros.
+
+### P3019: las migraciones no se pueden cambiar de proveedor
+
+Si alguna vez el esquema dice `postgresql` y las migraciones son de SQLite, el
+despliegue se para así:
+
+```
+Error: P3019
+The datasource provider `postgresql` specified in your schema does not match
+the one specified in the migration_lock.toml, `sqlite`.
+```
+
+Las dos migraciones que había estaban escritas en dialecto de SQLite, con
+`AUTOINCREMENT`, `DATETIME`, `TEXT` y `PRAGMA`, que PostgreSQL no entiende. Hay
+que rehacer el historial entero, y son **tres** cosas:
+
+1. `prisma/schema.prisma` con `provider = "postgresql"`
+2. `prisma/migrations/` borrada y generada de cero
+3. `prisma/migrations/migration_lock.toml` con `provider = "postgresql"`
+
+El paso 3 es el que más se olvida, y es el que vuelve a dar P3019: el fichero
+tiene que estar **dentro** de `prisma/migrations/`. Uno puesto en
+`prisma/migration_lock.toml` no lo lee nadie.
+
+### Cómo se genera sin base de datos
+
+`prisma migrate dev` necesita una base conectada. Para rehacer el historial no
+hace falta: `migrate diff` genera el SQL desde el esquema solo.
+
+```bash
+npx prisma migrate diff \
+  --from-empty \
+  --to-schema-datamodel prisma/schema.prisma \
+  --script
+```
+
+El nombre de la carpeta tiene que ser 14 dígitos y un guion bajo
+(`20260930124037_inicial_postgresql`). Con una `T` de más en medio, Prisma no la ve
+y no aplica nada sin avisar.
+
+### Las transacciones necesitan más tiempo
+
+Prisma corta las transacciones interactivas a los **5 segundos**. Ese valor se
+calibró con SQLite en local, donde cada consulta es una llamada a un fichero.
+Contra PostgreSQL en otra máquina cada consulta es un viaje de ida y vuelta, y una
+transacción que bloquea un hueco se pasa:
+
+```
+P2028: Transaction already closed. The timeout for this transaction was 5000 ms
+```
+
+Salió la primera vez que se ejecutó el flujo de reservas contra la base de
+Render. Las ocho transacciones de `appointment.service.js` y `client.service.js`
+usan ya `enTransaccion()`, que sube el límite a 20 s. Si añades transacciones
+nuevas, usa ese helper y no `prisma.$transaction` a pelo.
+
+### La versión de Node
+
+`package.json` declara `">=20.19.0 <25"`. El techo está a propósito: sin él,
+Render instala la última Node que exista —la 26 cuando se escribió esto— que es
+más nueva que Prisma 6.19.3, y el despliegue se rompe sin que nadie haya tocado
+el proyecto.
+
+### El build command y el start command no son intercambiables
+
+Poner `npx prisma migrate deploy && node src/server.js` en el campo de **build**
+arranca el servidor durante la compilación. Cuando el build acaba, Render mata el
+proceso, y como el build no ha instalado nunca las dependencias, el fallo
+siguiente será otro distinto y no tendrá nada que ver con la causa.
+
+| Campo | Qué va |
+|---|---|
+| Build | `npm ci && npx prisma generate` |
+| Start | `npm run start:prod` (migra y luego arranca) |
+
+`npm ci` **no** es opcional: si el repositorio lleva `node_modules` subido, son
+los binarios de Windows y el motor de Prisma no arranca en Linux. Son los 165 MB
+de la primera descarga.
+
+### Los fallos y lo que se veía en el navegador
+
+Por qué existe `/api/health`: sin él, estos son indistinguibles desde el
+navegador, porque los tres contestaban `"Error interno del servidor."`.
+
+| Lo que pasa por debajo | Lo que se veía |
+|---|---|
+| `DATABASE_URL` sin definir | 500, sin explicación |
+| `DATABASE_URL` con la URL de SQLite y el esquema en postgres | 503, diciendo que falta |
+| Migraciones sin aplicar | 500, sin explicación |
+
+Ahora los tres devuelven **503 con el motivo y el arreglo**, y `GET /api/health`
+los distingue. Es la primera URL que hay que abrir cuando algo va mal, antes que
+el registro del servidor: el registro de un despliegue se lee una vez y se pierde
+en el siguiente.
+
+### La búsqueda de clientes estaba rota con SQLite
+
+`mode: "insensitive"` sólo existe en PostgreSQL y MongoDB. Con el conector de
+SQLite la consulta lanzaba:
+
+```
+Unknown argument `mode`. Did you mean `lte`?
+```
+
+Es decir, **cualquier búsqueda en `/admin/clientes` devolvía un 500** desde el
+principio, y no se notó porque no había ninguna prueba de búsqueda. Ahora hay
+tres, y con PostgreSQL funcionan.
+
+### Primera puesta en marcha
+
+Las migraciones crean las tablas vacías. Para tener datos con los que entrar, desde
+la consola de Render (o en local):
+
+```bash
+npm run db:seed     # admin@ejemplo.com / Admin1234
+npm run simular     # 10 clientes y 10 citas de ejemplo
+```
+
+Ojo: `db:seed` **borra la base** antes de rellenarla. En un despliegue nuevo no
+importa, pero no lo ejecutes encima de datos que te importen.
+
+**Y cambia las contraseñas del seed antes de enseñarle esto a nadie.** Son
+públicas: `admin@ejemplo.com / Admin1234` está en el repositorio.
+
+### Si te quedas sin PostgreSQL: SQLite con disco
+
+No hace falta cambiar de motor. Con SQLite el `render.yaml` sería distinto: lleva
+un `disk` y la URL es `file:/opt/render/project/src/data/agenda.db`. El problema
+es que **el disco persistente requiere un plan de pago** y SQLite sin disco se
+vacía en cada despliegue.
+
+### Lo que no aguanta
+
+- **`mode: "insensitive"` obliga a PostgreSQL.** No hay marcha atrás al motor
+  SQLite con el código como está.
+- **`data/.jwt-secret`.** En local se guarda en un fichero y las sesiones
+  sobreviven a un reinicio. En Render ese directorio es efímero, así que sólo
+  sirve si `JWT_SECRET` está en el entorno. Si no lo está, funciona y avisa.
+
 ## Pruebas
 
 ```bash
-npm test              # 38 pruebas: reglas de negocio y capa HTTP
+npm test              # 47 pruebas: reglas de negocio, capa HTTP y despliegue
 npm run check:imports # comprueba que todos los imports existen
 npm run escenario     # los 30 puntos del escenario de aceptación, sobre el servidor
 ```
@@ -220,6 +432,16 @@ npm run estado         # qué hay ahora mismo en cada tabla
 
 `npm run reset` borra también `data/.jwt-secret`, así que las sesiones de la
 ejecución anterior dejan de valer y todo empieza de verdad.
+
+## Simulación de usuarios
+
+`SIMULACION-USUARIOS.md` no forma parte de la aplicación: es un documento de
+trabajo con 15 perfiles simulados de 10 rubros distintos, lo que piden de la
+aplicación, lo que les sobra, qué precio aceptarían y una hoja de ruta de
+mejoras. **Las personas son ficticias y los precios de mercado que se citan
+como referencia sí son reales** (recogidos en septiembre de 2026). El propio
+documento explica cómo sustituir la simulación por entrevistas reales. No lo
+tomes por investigación de mercado.
 
 ## Simulación de datos
 

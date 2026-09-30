@@ -5,7 +5,7 @@
   "description": "Gestión de tareas, clientes, disponibilidad y citas · Express + Prisma + SQLite",
   "type": "module",
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=20.19.0 <25"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -24,7 +24,9 @@
     "estado": "node scripts/estado.js",
     "test": "node --test \"test/**/*.test.js\"",
     "check:imports": "node scripts/comprobar-imports.mjs",
-    "escenario": "node scripts/escenario.js"
+    "escenario": "node scripts/escenario.js",
+    "start:prod": "prisma migrate deploy && node src/server.js",
+    "prestart:prod": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

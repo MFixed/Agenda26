@@ -4,6 +4,7 @@ import { prisma } from "../src/config/database.js";
 import * as authService from "../src/services/auth.service.js";
 import * as appointmentService from "../src/services/appointment.service.js";
 import * as availabilityService from "../src/services/availability.service.js";
+import * as clientService from "../src/services/client.service.js";
 import * as taskService from "../src/services/task.service.js";
 import { parseDisponibilidad } from "../src/validators/availability.validator.js";
 import { hoyMasDias } from "../src/utils/date.js";
@@ -777,6 +778,61 @@ test("el alcance se combina con los demás filtros", async () => {
     assert.ok(
       agendadasDeCitas.items.some((t) => t.id === cita.taskId),
       "la de cita agendada sale en su alcance"
+    );
+  } finally {
+    await limpiar(ids);
+  }
+});
+
+/**
+ * Borrar un cliente no puede plantar tareas zombis en "Mis tareas".
+ *
+ * La cascada del usuario borra sus citas, pero Task.clientId está en SetNull: sin
+ * este cuidado, cada cliente eliminado dejaba su tarea de cita viva, sin cliente
+ * y sin cita, y el administrador la encontraba en su lista sin saber de dónde
+ * salió. Era un fallo silencioso que sólo se notaba al contar.
+ */
+test("eliminar un cliente no deja tareas sueltas en la lista de trabajo", async () => {
+  const ids = idsVacios();
+  const { usuario } = await crearCliente(`zombis.${Date.now()}@ejemplo.com`);
+  const jefe = await admin();
+  ids.clientes.push(usuario.id);
+
+  try {
+    const hueco = await crearHuecoLibreLejos(17);
+    ids.disponibilidades.push(hueco.id);
+
+    const cita = await reservar({ cliente: usuario.client, hueco, title: "Trabajo que se va con el cliente" });
+    // Una tarea propia del administrador, asignada a mano a ese cliente: ÉSTA sí
+    // debe sobrevivir al borrado, porque es trabajo suyo y no de la cita.
+    const tareaPropia = await prisma.task.create({
+      data: { title: "Tarea asignada a mano", clientId: usuario.client.id }
+    });
+    ids.tareas.push(tareaPropia.id);
+
+    const antes = await taskService.listarTareas({ alcance: "propias", limit: 500 });
+    assert.ok(!antes.items.some((t) => t.id === cita.taskId), "antes, la tarea de la cita es de cita");
+
+    await clientService.eliminarCliente(usuario.client.id, jefe);
+
+    // La cita y su tarea se han ido.
+    const citas = await prisma.appointment.count({ where: { id: cita.id } });
+    assert.equal(citas, 0, "la cita se borra en cascada");
+
+    const tareaDeLaCita = await prisma.task.findUnique({ where: { id: cita.taskId } });
+    assert.equal(tareaDeLaCita, null, "la tarea que nació de la cita también se va");
+
+    // Pero la tarea que el administrador creó a mano se queda, aunque su cliente
+    // ya no exista.
+    const superviviente = await prisma.task.findUnique({ where: { id: tareaPropia.id } });
+    assert.ok(superviviente, "la tarea asignada a mano no se borra");
+    assert.equal(superviviente.clientId, null, "pero pierde el cliente, que ya no existe");
+
+    // Y no queda ninguna tarea huérfana con el nombre de la cita.
+    const propias = await taskService.listarTareas({ alcance: "propias", limit: 500 });
+    assert.ok(
+      !propias.items.some((t) => t.title === "Trabajo que se va con el cliente"),
+      "no debe quedar ninguna tarea de la cita en la lista del administrador"
     );
   } finally {
     await limpiar(ids);

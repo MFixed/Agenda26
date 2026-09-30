@@ -278,6 +278,53 @@ async function publicarHuecoLibre(tokenAdmin, desde) {
   assert.fail("No se pudo publicar ningún hueco libre para la prueba.");
 }
 
+/**
+ * Búsqueda de clientes.
+ *
+ * Estas pruebas existen porque la búsqueda estaba rota y no se notaba: el código
+ * usaba `mode: "insensitive"`, que Prisma sólo acepta en PostgreSQL. Con el
+ * conector de SQLite la consulta lanzaba "Unknown argument 'mode'" y el listado
+ * entero devolvía 500. Nadie la probó porque no había ninguna prueba de búsqueda.
+ */
+test("la búsqueda de clientes encuentra por nombre sin distinguir mayúsculas", async () => {
+  const { ana } = await cuentas();
+
+  // En minúsculas, contra un nombre que en la ficha está en mayúsculas.
+  const minusculas = ana.client.nombre.toLowerCase();
+  const { estado, datos } = await pedir(`/api/clients?q=${encodeURIComponent(minusculas)}`, {
+    token: tokens.admin
+  });
+
+  assert.equal(estado, 200, "la búsqueda no debe devolver un error");
+  assert.ok(Array.isArray(datos.items), "debe devolver un listado");
+  assert.ok(
+    datos.items.some((c) => c.id === ana.client.id),
+    `debe encontrar a ${ana.client.nombre} buscando "${minusculas}"`
+  );
+});
+
+test("la búsqueda de clientes encuentra por correo", async () => {
+  const { ana } = await cuentas();
+
+  const { estado, datos } = await pedir(`/api/clients?q=${encodeURIComponent(ana.email)}`, {
+    token: tokens.admin
+  });
+
+  assert.equal(estado, 200);
+  assert.ok(
+    datos.items.some((c) => c.id === ana.client.id),
+    "debe encontrar por correo electrónico"
+  );
+});
+
+test("una búsqueda que no encuentra nada devuelve una lista vacía, no un error", async () => {
+  const { estado, datos } = await pedir("/api/clients?q=noexistenadaprimeracosa", { token: tokens.admin });
+
+  assert.equal(estado, 200);
+  assert.deepEqual(datos.items, [], "sin resultados es una lista vacía");
+  assert.equal(datos.total, 0);
+});
+
 test("un cliente no puede ver la ficha de otro cliente", async () => {
   const { luis } = await cuentas();
   const { estado } = await pedir(`/api/clients/${luis.client.id}`, { token: tokens.ana });
