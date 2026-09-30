@@ -27,7 +27,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = "postgresql://root:5UugytAFcII2HVzn9pMqgHZ6RvtLmH2m@dpg-dauicivavr4c739afo7g-a.oregon-postgres.render.com/agenda_63zf"
 }
 
 enum Role {
