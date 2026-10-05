@@ -1,6 +1,6 @@
 /**
  * Piezas de interfaz reutilizadas por varias páginas: cabecera con el menú del
- * rol, campana de notificaciones, modal de detalle y confirmaciones.
+ * rol, modal de detalle y confirmaciones.
  *
  * Aquí no hay reglas de negocio: sólo presentación y eventos. Quien llama es el
  * que decide qué se puede hacer.
@@ -9,13 +9,9 @@ import {
   ESTADOS_CITA,
   esc,
   fecha,
-  fechaHora,
   get,
   iniciales,
-  insignia,
-  put,
-  textoError,
-  toast
+  insignia
 } from "./api.js";
 
 /* ---------------- Cabecera ---------------- */
@@ -38,9 +34,6 @@ export function montarCabecera(sesion) {
 
   montarMenuMovil();
 
-  // Se elimina el botón de notificaciones de la cabecera.
-  document.querySelector("#notificaciones")?.remove();
-
   const actual = window.location.pathname;
   for (const enlace of document.querySelectorAll(".nav-links a, .nav-sidebar-links a")) {
     const destino = enlace.getAttribute("href");
@@ -50,8 +43,6 @@ export function montarCabecera(sesion) {
       enlace.classList.remove("active");
     }
   }
-
-  montarNotificaciones(sesion);
 }
 
 /**
@@ -146,98 +137,6 @@ function montarMenuMovil() {
       cerrar();
     }
   });
-}
-
-/* ---------------- Notificaciones ---------------- */
-
-async function montarNotificaciones(sesion) {
-  const campana = document.querySelector("#notificaciones");
-  if (!campana) {
-    return;
-  }
-
-  const pintar = async () => {
-    try {
-      const { items, noLeidas } = await get("/api/notifications?limit=8");
-      campana.dataset.total = String(noLeidas);
-      const globo = campana.querySelector("#notificaciones-total");
-      if (globo) {
-        globo.textContent = noLeidas > 9 ? "9+" : String(noLeidas);
-        globo.hidden = noLeidas === 0;
-      }
-
-      const lista = campana.querySelector("#notificaciones-lista");
-      if (!lista) {
-        return;
-      }
-      lista.innerHTML =
-        items.length === 0
-          ? '<p class="muted" style="padding:.5rem">No hay avisos.</p>'
-          : items
-              .map(
-                (aviso) => `
-        <button class="notification-row${aviso.leida ? " leida" : ""}" type="button" data-id="${aviso.id}">
-          <span class="notification-dot" aria-hidden="true"></span>
-          <span class="notification-body">
-            <strong>${esc(aviso.title)}</strong>
-            <small>${esc(aviso.message)}</small>
-            <time>${esc(fechaHora(aviso.createdAt))}</time>
-          </span>
-        </button>`
-              )
-              .join("");
-    } catch {
-      // Un fallo al cargar la campana no debe romper la página.
-    }
-  };
-
-  const boton = campana.querySelector("button");
-  if (boton) {
-    boton.addEventListener("click", () => {
-      const abierto = campana.classList.toggle("abierta");
-      boton.setAttribute("aria-expanded", String(abierto));
-      if (abierto) {
-        void pintar();
-      }
-    });
-  }
-
-  const marcarTodas = campana.querySelector("#notificaciones-todas");
-  if (marcarTodas) {
-    marcarTodas.addEventListener("click", async () => {
-      try {
-        await put("/api/notifications/read-all");
-        await pintar();
-        toast("Notificaciones marcadas como leídas.");
-      } catch (error) {
-        toast(textoError(error), true);
-      }
-    });
-  }
-
-  campana.addEventListener("click", async (evento) => {
-    const fila = evento.target.closest(".notification-row");
-    if (!fila) {
-      return;
-    }
-    try {
-      await put(`/api/notifications/${fila.dataset.id}/read`);
-      await pintar();
-    } catch (error) {
-      toast(textoError(error), true);
-    }
-  });
-
-  // Clic fuera para cerrar el desplegable.
-  document.addEventListener("click", (evento) => {
-    if (!campana.contains(evento.target)) {
-      campana.classList.remove("abierta");
-      boton?.setAttribute("aria-expanded", "false");
-    }
-  });
-
-  void sesion;
-  await pintar();
 }
 
 /* ---------------- Modal ---------------- */
