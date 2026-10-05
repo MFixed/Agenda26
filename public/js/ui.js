@@ -36,8 +36,13 @@ export function montarCabecera(sesion) {
     insigniaRol.classList.add(sesion.user.role === "ADMIN" ? "badge-admin" : "badge-cliente");
   }
 
+  montarMenuMovil();
+
+  // Se elimina el botón de notificaciones de la cabecera.
+  document.querySelector("#notificaciones")?.remove();
+
   const actual = window.location.pathname;
-  for (const enlace of document.querySelectorAll(".nav-links a")) {
+  for (const enlace of document.querySelectorAll(".nav-links a, .nav-sidebar-links a")) {
     const destino = enlace.getAttribute("href");
     if (destino === actual || (destino !== "/" && actual.startsWith(destino))) {
       enlace.classList.add("active");
@@ -47,6 +52,100 @@ export function montarCabecera(sesion) {
   }
 
   montarNotificaciones(sesion);
+}
+
+/**
+ * Menú burger para móvil: sustituye a los enlaces de la cabecera (que se
+ * ocultan en pantallas pequeñas) y abre un sidebar con las mismas rutas.
+ */
+function montarMenuMovil() {
+  const barra = document.querySelector(".topbar-inner");
+  const nav = barra?.querySelector(".nav-links");
+  if (!barra || !nav || document.querySelector(".nav-burger")) {
+    return;
+  }
+
+  const burger = document.createElement("button");
+  burger.type = "button";
+  burger.className = "nav-burger";
+  burger.setAttribute("aria-label", "Abrir menú");
+  burger.setAttribute("aria-expanded", "false");
+  burger.innerHTML = "<span></span><span></span><span></span>";
+  const marca = barra.querySelector(".brand");
+  if (marca) {
+    marca.before(burger);
+  } else {
+    barra.insertBefore(burger, barra.firstChild);
+  }
+
+  const sidebar = document.createElement("aside");
+  sidebar.className = "nav-sidebar";
+  sidebar.setAttribute("aria-label", "Navegación");
+  const enlaces = document.createElement("nav");
+  enlaces.className = "nav-sidebar-links";
+  enlaces.setAttribute("aria-label", "Navegación principal móvil");
+  for (const enlace of nav.querySelectorAll("a")) {
+    enlaces.appendChild(enlace.cloneNode(true));
+  }
+  sidebar.innerHTML = `
+    <div class="nav-sidebar-head">
+      <strong>Menú</strong>
+      <button class="icon-button" type="button" aria-label="Cerrar menú" data-cerrar-menu>×</button>
+    </div>`;
+  sidebar.appendChild(enlaces);
+
+  // Contador de citas pendientes a la derecha del enlace "Citas".
+  const enlaceCitas = [...enlaces.querySelectorAll("a")].find((a) =>
+    (a.getAttribute("href") || "").includes("citas")
+  );
+  if (enlaceCitas) {
+    const contador = document.createElement("span");
+    contador.className = "pendientes-contador";
+    contador.hidden = true;
+    enlaceCitas.appendChild(contador);
+    get("/api/appointments?estado=PENDING&limit=1")
+      .then((datos) => {
+        const total = datos?.total ?? 0;
+        contador.textContent = total > 9 ? "9+" : String(total);
+        contador.hidden = total === 0;
+      })
+      .catch(() => {
+        contador.hidden = true;
+      });
+  }
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "nav-backdrop";
+  backdrop.hidden = true;
+
+  document.body.append(sidebar, backdrop);
+
+  const abrir = () => {
+    document.body.classList.add("nav-abierta");
+    burger.setAttribute("aria-expanded", "true");
+    burger.setAttribute("aria-label", "Menú abierto");
+    backdrop.hidden = false;
+  };
+  const cerrar = () => {
+    document.body.classList.remove("nav-abierta");
+    burger.setAttribute("aria-expanded", "false");
+    burger.setAttribute("aria-label", "Abrir menú");
+    backdrop.hidden = true;
+  };
+
+  burger.addEventListener("click", abrir);
+  backdrop.addEventListener("click", cerrar);
+  sidebar.querySelector("[data-cerrar-menu]").addEventListener("click", cerrar);
+  sidebar.addEventListener("click", (evento) => {
+    if (evento.target.closest("a")) {
+      cerrar();
+    }
+  });
+  document.addEventListener("keydown", (evento) => {
+    if (evento.key === "Escape") {
+      cerrar();
+    }
+  });
 }
 
 /* ---------------- Notificaciones ---------------- */
