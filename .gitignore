@@ -1,0 +1,10 @@
+node_modules/
+prisma/*.db
+prisma/*.db-journal
+prisma/*.db-shm
+prisma/*.db-wal
+data/
+*.log
+.env
+.DS_Store
+Thumbs.db

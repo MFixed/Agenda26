@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plataforma · Negocios</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script type="module" src="/js/super.js"></script>
+  </head>
+  <body data-page="super">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/super">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span><strong>Gestión</strong><small>Plataforma</small></span>
+        </a>
+        <div class="topbar-actions">
+          <span class="badge" id="rol-badge">…</span>
+          <span class="user-chip" id="user-name">…</span>
+          <button class="button button-quiet button-sm" id="logout-button" type="button">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Plataforma</p>
+          <h1>Negocios</h1>
+          <p class="muted">
+            Cada empresa tiene sus administradores, sus clientes y sus citas, y no ve nada de las demás.
+            Desactivar una empresa le cierra las puertas sin borrar sus datos.
+          </p>
+        </div>
+      </section>
+
+      <section class="auth-card" style="margin-bottom:1.5rem">
+        <h2>Crear un negocio</h2>
+        <form id="negocio-form" class="form-grid">
+          <label class="field">
+            <span>Nombre del negocio *</span>
+            <input id="nombre" type="text" maxlength="120" required>
+          </label>
+          <label class="field">
+            <span>Identificador (URL) *</span>
+            <input id="slug" type="text" placeholder="mi-negocio" maxlength="60" required>
+          </label>
+          <label class="field field-wide">
+            <span>Descripción</span>
+            <input id="descripcion" type="text" maxlength="240">
+          </label>
+          <label class="field">
+            <span>Nombre del primer administrador *</span>
+            <input id="adminNombre" type="text" maxlength="120" required>
+          </label>
+          <label class="field">
+            <span>Correo del administrador *</span>
+            <input id="adminEmail" type="email" required>
+          </label>
+          <label class="field">
+            <span>Contraseña del administrador *</span>
+            <input id="adminPassword" type="password" minlength="8" maxlength="128" required>
+          </label>
+          <p class="form-error" id="form-error" role="alert" hidden></p>
+          <button class="button button-primary" type="submit">Crear negocio</button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Negocios existentes</h2>
+        <p class="form-error" id="lista-error" role="alert" hidden></p>
+        <table id="tabla-negocios" style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="text-align:left">Nombre</th>
+              <th style="text-align:left">URL</th>
+              <th style="text-align:left">Estado</th>
+              <th style="text-align:left">Usuarios</th>
+              <th style="text-align:left">Clientes</th>
+              <th style="text-align:left">Citas</th>
+              <th style="text-align:left">Administradores</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+  </body>
+</html>

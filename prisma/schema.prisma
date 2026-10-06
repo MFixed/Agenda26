@@ -1,0 +1,260 @@
+// Esquema de la aplicación de gestión de tareas, clientes, disponibilidad y citas.
+//
+// Multi-negocio: cada negocio tiene sus administradores, clientes, categorías,
+// tareas, disponibilidades y citas, y ninguno puede ver los del otro. El
+// superadministrador (role SUPERADMIN) no pertenece a ningún negocio y sólo
+// gestiona los negocios en sí (darlos de alta, activarlos, desactivarlos).
+//
+// Decisiones que conviene tener presentes al leerlo:
+//
+// 1. Cliente y User están separados: el email y la contraseña viven SÓLO en
+//    User. Client es la ficha de la persona (documento, nacimiento, contacto).
+//
+// 2. No hay enums de "fecha y hora" combinados: las horas son cadenas "HH:mm"
+//    porque SQLite no tiene tipo hora, y las fechas son DateTime (Prisma las
+//    guarda en milisegundos epoch). Ver utils/date.js para la convención completa.
+//
+// 3. Appointment NO tiene UNIQUE en availabilityId. El bloqueo de un horario lo
+//    impone Availability.status mediante un UPDATE condicional dentro de una
+//    transacción (compare-and-swap), que es atómico en PostgreSQL. Si pusieras la
+//    restricción UNIQUE, un horario rechazado o cancelado no podría volver a
+//    reservarse nunca.
+//
+// 4. Task.dueDate = NULL significa "tarea sin fecha". Nunca se guarda una fecha
+//    ficticia para rellenar el hueco.
+//
+// 5. AppointmentEvent es el historial: cada cambio de estado queda registrado con
+//    su autor y su fecha. No se duplica información, sólo la trazabilidad.
+//
+// 6. Los únicos campos que antes eran globales (Client.documento, Category.name,
+//    Availability(date,startTime)) pasan a ser únicos DENTRO de cada negocio:
+//    dos negocios distintos pueden tener la misma categoría "SERVICIOS" o el
+//    mismo documento.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  CLIENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  HELD
+  RESERVED
+  BLOCKED
+}
+
+enum AppointmentStatus {
+  PENDING
+  COORDINATED
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+enum NotificationChannel {
+  INTERNAL
+  EMAIL
+  WHATSAPP
+}
+
+model Business {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  slug        String   @unique
+  descripcion String?
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users           User[]
+  clients         Client[]
+  categories      Category[]
+  tasks           Task[]
+  availabilities  Availability[]
+  appointments    Appointment[]
+
+  @@index([activo])
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  nombre       String
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(CLIENT)
+  activo       Boolean   @default(true)
+  ultimoAcceso DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  businessId   Int?
+
+  business      Business?           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client        Client?
+  notifications Notification[]
+  events        AppointmentEvent[]
+
+  @@index([role])
+  @@index([businessId])
+}
+
+model Client {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  businessId      Int
+  nombre          String
+  documento       String?
+  fechaNacimiento DateTime?
+  telefono        String?
+  direccion       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  tasks        Task[]
+
+  @@unique([businessId, documento])
+  @@index([nombre])
+  @@index([businessId])
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  businessId  Int
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+}
+
+model Task {
+  id          Int        @id @default(autoincrement())
+  businessId  Int
+  title       String
+  description String?
+  categoryId  Int?
+  clientId    Int?
+  dueDate     DateTime?
+  dueTime     String?
+  status      TaskStatus @default(PENDING)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category     Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  client       Client?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  appointments Appointment[]
+
+  @@index([businessId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([categoryId])
+  @@index([clientId])
+}
+
+model Availability {
+  id         Int                @id @default(autoincrement())
+  businessId Int
+  date       DateTime
+  startTime  String
+  endTime    String
+  status     AvailabilityStatus @default(AVAILABLE)
+  note       String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@unique([businessId, date, startTime])
+  @@index([businessId])
+  @@index([date])
+  @@index([status])
+}
+
+model Appointment {
+  id             Int               @id @default(autoincrement())
+  businessId     Int
+  taskId         Int
+  clientId       Int
+  availabilityId Int
+  note           String?
+  status         AppointmentStatus @default(PENDING)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  task        Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  client      Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  availability Availability     @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
+  events      AppointmentEvent[]
+  notifications Notification[]
+
+  @@index([businessId])
+  @@index([clientId])
+  @@index([taskId])
+  @@index([availabilityId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AppointmentEvent {
+  id            Int                @id @default(autoincrement())
+  appointmentId Int
+  actorId       Int?
+  fromStatus    AppointmentStatus?
+  toStatus      AppointmentStatus
+  note          String?
+  createdAt     DateTime           @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  // Quién hizo el cambio. onDelete: SetNull y no Cascade a propósito: si se
+  // borrara la cuenta de un administrador, su historial debe seguir ahí con
+  // actor = null en lugar de desaparecer con él.
+  actor       User?              @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([appointmentId, createdAt])
+  @@index([actorId])
+}
+
+model Notification {
+  id            Int                 @id @default(autoincrement())
+  userId        Int
+  appointmentId Int?
+  channel       NotificationChannel @default(INTERNAL)
+  type          String
+  title         String
+  message       String
+  readAt        DateTime?
+  createdAt     DateTime            @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+}
