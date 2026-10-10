@@ -1,0 +1,822 @@
+# PROMPT DE DESARROLLO
+
+Actúa como un desarrollador senior práctico.
+
+Construye el proyecto con **código simple, claro, mantenible y seguro**, evitando sobreingeniería.
+
+## Stack
+
+* Node.js
+* Express
+* JavaScript
+* ES Modules (`"type": "module"`)
+* Prisma
+* PostgreSQL
+* REST API
+* OpenAPI 3 + Swagger UI (`swagger-ui-express`)
+* Morgan (log de peticiones)
+* CORS (`cors`)
+* Helmet (cabeceras de seguridad)
+* `express-rate-limit` (límite de peticiones, en memoria)
+* HTML, CSS y JavaScript Vanilla
+
+## Arquitectura
+
+```text
+Route
+  ↓
+Controller
+  ↓
+Service
+  ↓
+Model / ORM
+  ↓
+Database
+```
+
+El proyecto debe permitir cambiar el ORM o la tecnología de persistencia sin obligar a modificar toda la lógica de negocio.
+
+## Estructura
+
+```text
+/
+├── index.js
+├── package.json
+├── .env
+├── .env.example
+│
+├── config/
+│   ├── env.js
+│   └── driver.js
+│
+├── prisma/
+│   ├── schema.prisma
+│   ├── seed.js
+│   └── reset.js
+│
+├── src/
+│   ├── server.js
+│   │
+│   ├── api/
+│   │   ├── router.js
+│   │   └── entidad/
+│   │       ├── entidad.controllers.js
+│   │       ├── entidad.routes.js
+│   │       ├── entidad.models.js
+│   │       ├── entidad.regex.js
+│   │       └── service/
+│   │           └── entidad.service.js
+│   │
+│   ├── docs/
+│   │   ├── openapi.js
+│   │   ├── components.js
+│   │   ├── docs.routes.js
+│   │   └── paths/
+│   │       └── entidad.js
+│   │
+│   ├── middlewares/
+│   │   ├── auth.js
+│   │   ├── cors.js
+│   │   ├── logger.js
+│   │   ├── rateLimit.js
+│   │   └── security.js
+│   │
+│   └── utils/
+│       ├── errorHandler.js
+│       └── regexValidator.js
+│
+└── views/
+    └── entidad/
+        ├── index.html
+        ├── index.js
+        └── style.css
+```
+
+Los archivos son **referenciales**.
+
+No crear archivos simplemente porque aparecen en la estructura. Crear solamente los que sean necesarios para el proyecto.
+
+## Models
+
+`entidad.models.js` es **opcional**.
+
+Con Prisma, utilizar Prisma directamente desde el `service` cuando sea suficiente.
+
+Utilizar `models.js` cuando exista una necesidad real, por ejemplo:
+
+* utilizar Mongoose u otro ORM/ODM;
+* encapsular operaciones específicas del modelo;
+* adaptar la persistencia sin mezclarla con la lógica de negocio.
+
+No crear `models.js` solamente por seguir un patrón.
+
+## Configuración
+
+Utilizar ES Modules:
+
+```json
+"type": "module"
+```
+
+Toda información sensible debe manejarse mediante:
+
+```text
+.env
+.env.example
+```
+
+Nunca colocar credenciales, contraseñas o secretos directamente en el código.
+
+`config/env.js` centraliza y valida la configuración del entorno.
+
+### Variables de los transversales
+
+```text
+CORS_ORIGIN            Orígenes que pueden llamar a la API, separados por comas. Por defecto *.
+LOG_FORMAT             Formato del log de morgan. Por defecto dev en desarrollo, combined en producción.
+DOCS_ENABLED           false apaga la documentación. Por defecto true.
+RATE_LIMIT_ENABLED     false apaga los límites de peticiones. Por defecto true.
+RATE_LIMIT_MAX         Peticiones por ventana en toda la API. Por defecto 300.
+RATE_LIMIT_WINDOW_MINUTES  Ventana de los límites, en minutos. Por defecto 15.
+LOGIN_RATE_LIMIT_MAX   Intentos fallidos de login por ventana y por email. Por defecto 15.
+TRUST_PROXY            Cuántos proxies hay delante. Por defecto 1 en producción.
+CSP_ENABLED            false apaga solo la CSP. Por defecto true.
+```
+
+Todas van documentadas en `.env.example` con su comentario. Ninguna tiene valor
+obligatorio: la aplicación arranca igual sin ellas.
+
+## Manejo de errores
+
+El manejo global de errores debe estar en:
+
+```text
+src/utils/errorHandler.js
+```
+
+Los errores deben manejarse de forma consistente.
+
+Evitar duplicar lógica de manejo de errores en controllers y services.
+
+No exponer información sensible al cliente.
+
+## Documentación de la API
+
+La API se documenta con **OpenAPI 3** y **Swagger UI**:
+
+```text
+swagger-ui-express
+```
+
+Montaje:
+
+```text
+http://localhost:<PORT>/api/docs
+```
+
+Y el documento plano, que es la fuente:
+
+```text
+http://localhost:<PORT>/api/docs/openapi.json
+```
+
+El JSON plano es la fuente de verdad y la interfaz solo lo pinta: un generador de
+clientes, Postman o las pruebas automáticas leen el JSON sin pasar por la
+interfaz.
+
+### OpenAPI
+
+```text
+src/docs/
+├── openapi.js
+├── components.js
+├── docs.routes.js
+└── paths/
+    └── entidad.js
+```
+
+* `openapi.js`: `openapi`, `info`, `servers`, `tags` y el ensamblado de `paths`.
+* `components.js`: `securitySchemes`, `parameters`, `schemas` y `responses`
+  compartidas.
+* `docs.routes.js`: monta Swagger UI y sirve el JSON.
+* `paths/<entidad>.js`: las rutas de cada entidad, con `summary`, `description`,
+  `tags`, `parameters`, `requestBody` y `responses`.
+
+### Reglas de la documentación
+
+* Escribir el documento **a mano**, no generarlo con comentarios en las rutas: la
+  especificación es parte del contrato con quien consume la API y así se puede
+  leer, revisar y versionar sin arrancar el servidor.
+* **Un archivo por entidad** en `paths/`. Añadir un endpoint es editar su bloque,
+  no un archivo de mil líneas.
+* Cada operación lleva `summary`, `tags` y `responses`. Documentar los errores
+  (`400`, `401`, `403`, `404`, `409`) usando las respuestas compartidas.
+* Autenticación con `securitySchemes` de tipo `http` / `bearer` (JWT). El botón
+  **Authorize** de Swagger UI permite probar con un token real.
+* Documentar solo lo que existe. Una operación sin ruta, o una ruta sin
+  documentar, es una inconsistencia.
+
+### Montaje
+
+```js
+app.use('/api', docsRouter);
+```
+
+El `docsRouter` se monta **antes** del `notFoundHandler` de la API y antes de
+las páginas, que responden 404 a cualquier dirección desconocida.
+
+Usar `swaggerUi.serve` y **no** `swaggerUi.serveFiles`: con `serveFiles` el
+`swagger-ui-init.js` sale sin el documento incrustado y la página intenta
+descargarlo de la raíz, quedando vacía.
+
+Se puede apagar con `DOCS_ENABLED=false`, útil en producción para no exponer el
+mapa de la API.
+
+## Registro de peticiones
+
+El registro de peticiones se hace con **Morgan**:
+
+```text
+morgan
+```
+
+```text
+src/middlewares/logger.js
+```
+
+El formato sale de la variable `LOG_FORMAT`:
+
+| Valor       | Cuándo                                        |
+| ----------- | --------------------------------------------- |
+| `dev`       | Desarrollo: una línea corta y coloreada.      |
+| `combined`  | Producción: remoto, user agent y referer.     |
+| `short`     | Igual que `dev` pero sin colores.             |
+| `tiny`      | Lo mínimo: método, url, status y longitud.    |
+| `common`    | Formato combinado clásico.                    |
+| `none`      | Apaga el log.                                 |
+
+### Reglas del log
+
+* El formato se resuelve **una vez al arrancar**, no en cada petición.
+* Excluir del log lo que genera ruido y no ayuda a depurar: assets estáticos,
+  la documentación y el endpoint de salud. Un monitor consulta la salud cada
+  pocos segundos y llenaría el log.
+* El filtro usa `req.originalUrl`, no `req.path` ni `req.url`: Morgan decide qué
+  saltar cuando la respuesta termina, y para entonces el router ya reescribió
+  `req.url` con el tramo que montó (`/health` en vez de `/api/health`).
+* El log se registra **antes** del `cors` y del parseo del body.
+
+## CORS
+
+Las cabeceras CORS se configuran con:
+
+```text
+cors
+```
+
+```text
+src/middlewares/cors.js
+```
+
+Orígenes permitidos mediante `CORS_ORIGIN`, separados por comas:
+
+```text
+CORS_ORIGIN=http://localhost:5173,https://app.ejemplo.com
+```
+
+`*` (por defecto) acepta cualquier origen. Es cómodo en desarrollo y lo que **no**
+se debe dejar en producción.
+
+### Reglas de CORS
+
+* Si el frontend se sirve desde el mismo Express, CORS no hace falta en el uso
+  normal: la petición va al mismo origen. Importa cuando el frontend se abre
+  desde otro host.
+* La API va con token en la cabecera `Authorization`, **no** con cookies. Por eso
+  no hace falta `credentials: true`: sin ella el navegador no manda cookies y una
+  respuesta con `Access-Control-Allow-Origin: *` sigue siendo válida.
+* Declarar los métodos usados: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`.
+* Declarar las cabeceras usadas: `Content-Type` y `Authorization`.
+* `maxAge` alto (por ejemplo `86400`) para que el navegador no repita el
+  preflight en cada petición.
+
+### Orden de los middlewares transversales
+
+```js
+app.use(loggerMiddleware);  // ver la petición antes de que la toque nadie
+app.use(corsMiddleware);    // el preflight se responde antes de cualquier router
+app.use(express.json());    // parseo del body
+```
+
+En ese orden: el log tiene que ver la petición completa, y el preflight de CORS
+tiene que responderse antes de que ningún router lo tome.
+
+## Límite de peticiones
+
+Con `express-rate-limit`, **en memoria y sin Redis**:
+
+```text
+src/middlewares/rateLimit.js
+```
+
+Dos límites distintos:
+
+| Límite | Dónde | Qué corta |
+| ------ | ----- | --------- |
+| General | `app.use('/api', limitadores.general)` | Bucles infinitos, reintentos, abuso tonto. |
+| Login y registro | En la ruta, `limitadores.login` | Pruebas de contraseña contra una cuenta. |
+
+Son dos porque el del login necesita contar **fallos**, y eso solo se puede
+saber si el middleware está en la ruta, no si envuelve toda la API.
+
+### Reglas del límite
+
+* El del login usa `skipSuccessfulRequests`: **cuenta solo los fallos**. Es la
+  diferencia entre una protección y una trampa: un usuario que entra bien no
+  gasta nada, y uno que se equivoca cinco veces seguidas tiene que esperar, que
+  es justo lo que hace un humano y un ataque automatizado no.
+* La clave del límite de login es `IP + email`, no solo la IP. Por IP sola, un
+  atacante con muchos correos distintos no se frenaría nunca.
+* Usar `ipKeyGenerator` y no `req.ip` a pelo: una IPv6 viene con su prefijo de
+  /64, así que un cliente tiene millones de direcciones y el límite se esquivaría
+  cambiando de dirección.
+* Nunca devolver una clave vacía. Si no hay email legible, usar solo la IP.
+* Los topes van **generosos**. Un limitador mal puesto no protege: solo hace que
+  la aplicación deje de funcionar para quien la usa de verdad.
+* `/api/health` y `/api/docs` exentos: un monitor que consulta la salud cada
+  pocos segundos no puede gastar el cupo ni ser bloqueado.
+* El error del límite sale con la **misma forma** que el resto de la API
+  (`{ error }`), no con el texto plano de la librería, para que el frontend no
+  tenga un segundo formato que aprender.
+* Declarar `TRUST_PROXY` si la API va detrás de un proxy o balanceador. Sin eso,
+  `req.ip` es la máquina de al lado y todas las peticiones comparten el mismo
+  límite: el primero que moleste tumba la API entera. Ponerlo sin que sea verdad
+  es peor que no ponerlo, porque un cliente podría mandar su propia cabecera
+  `X-Forwarded-For` y saltarse el límite.
+* Con varias instancias, cada una lleva su cuenta y el tope real es
+  `límite x instancias`. Es el trade-off de no depender de Redis; cuando haga
+  falta un almacén compartido, el cambio se queda en `rateLimit.js`.
+* `RATE_LIMIT_ENABLED=false` lo apaga entero. Las pruebas automáticas lo usan:
+  hacer 190 peticiones seguidas contra la API real no es tráfico hostil.
+
+## Cabeceras de seguridad
+
+Con `helmet`:
+
+```text
+src/middlewares/security.js
+```
+
+* Quita `X-Powered-By`, que si no dice la pila tecnológica a cualquiera que
+  pregunte.
+* `frameguard: 'deny'` explícito: helmet pondría `SAMEORIGIN`, pero la CSP ya
+  dice `frame-ancestors 'none'`, y que las dos cabeceras digan cosas distintas es
+  peor que no poner ninguna.
+* HSTS solo en producción: sobre `http` en desarrollo no hace nada, y en
+  producción lo pone el que termina TLS delante.
+
+### La CSP va laxa, a propósito
+
+El frontend es HTML estático **sin build**: lleva el script embebido
+(`<script type="module">`) y `style="..."` en línea en varias pantallas. Sin
+`'unsafe-inline'` en `script-src` y `style-src`, la aplicación se queda en
+blanco. Swagger UI también lo necesita: su CSS va dentro de un `<style>`.
+
+Lo que sí se cierra es lo que no cuesta:
+
+* `object-src 'none'`
+* `frame-ancestors 'none'`
+* `base-uri 'self'`, `form-action 'self'`
+* recursos solo del propio origen
+
+### `upgrade-insecure-requests`
+
+Helmet lo pone por defecto y **en desarrollo hace daño**: obliga al navegador a
+reescribir cada petición a `https`. En `localhost` no pasa nada porque Chrome
+trata ese origen como seguro, pero al probar desde la IP de la máquina en la red
+local sobre http plano, la aplicación deja de cargar y solo se ve una página en
+blanco. Ponerlo solo en producción.
+
+## Sesión y revocación de tokens
+
+Un JWT es sin estado, así que por sí solo no hay forma de invalidarlo: cerrar
+sesión respondiendo `204` deja el token sirviendo hasta que caduca.
+
+La versión barata de una lista de revocados es una **versión del token en el
+usuario**:
+
+```text
+model User {
+  tokenVersion Int @default(0)
+}
+```
+
+* El JWT lleva `ver` dentro.
+* `authenticate` compara el `ver` del token con el de la base en cada petición.
+  Si no coinciden, el token ya no vale.
+* Cerrar sesión y cambiar la contraseña incrementan `tokenVersion`.
+* No necesita ni memoria ni Redis: vive en la base, que ya está ahí. El coste
+  es una columna más y un entero más en una petición que ya consultaba al
+  usuario.
+
+Dos consecuencias que hay que conocer y aceptar:
+
+* **Cerrar sesión en un sitio cierra todos los dispositivos.** No sube la sesión
+  la que cambia, sube el token del usuario.
+* **Cambiar la contraseña cierra la sesión**, también la de quien la cambia. Es
+  lo correcto si alguien robó un token, pero el frontend tiene que avisar y
+  borrar el token.
+
+El campo interno **no sale nunca** en la respuesta: usar un helper tipo
+`USER_PUBLICO` que lo saca igual que saca `passwordHash`.
+
+## Puertas abiertas
+
+`POST /auth/register` es pública, sin token. Por eso:
+
+* Va con el mismo límite de intentos que el login, o se pueden crear cuentas en
+  masa.
+* Un email ya registrado responde con un mensaje que **no dice qué campo fue el
+  que chocó**. Con un mensaje como "ese email ya está registrado" se pueden
+  recorrer correos y sacar la lista de clientes de la plataforma. El login
+  normalmente ya está protegido así (mismo error para email inexistente y
+  contraseña mala); el registro también.
+
+No hace falta protección CSRF: el token va en la cabecera `Authorization`, no en
+una cookie, así que el navegador no lo manda solo.
+
+## Package.json
+
+Configurar correctamente `package.json` utilizando ES Modules.
+
+Incluir scripts claros para:
+
+```text
+dev
+start
+prisma:generate
+prisma:migrate
+prisma:studio
+```
+
+Agregar otros scripts solamente cuando sean realmente necesarios.
+
+## Base de datos
+
+Por defecto utilizar:
+
+```text
+Prisma + PostgreSQL
+```
+
+El esquema se encuentra en:
+
+```text
+prisma/schema.prisma
+```
+
+Utilizar migraciones de Prisma para modificar la estructura de la base de datos.
+
+Si el proyecto utiliza otro ORM/ODM, adaptar la capa de persistencia sin modificar innecesariamente la arquitectura.
+
+## Datos de prueba y base vacía
+
+`prisma/seed.js` deja datos de ejemplo. `prisma/reset.js` hace lo contrario:
+vacía la base y deja **solo el superadministrador**.
+
+```bash
+npm run seed
+npm run db:reset -- --force
+```
+
+Es lo que hay que correr cuando la base se ha llenado de datos de prueba.
+
+Reglas para el reset:
+
+* **Nunca borrar la cuenta del superadministrador.** Es la única con la que se
+  entra después de vaciar. Borrarla para recrearla con otro id no aporta nada.
+* **No tocar su contraseña** en el `update`. Un reset no debe devolver la clave
+  de ejemplo sin querer.
+* **Borrar en orden inverso al de las relaciones**, porque las claves foráneas
+  no dejan borrar un padre que todavía tiene hijos.
+* **Listar lo que se va a borrar antes de hacerlo.** Sin terminal, exigir
+  `--force` y salir antes que borrar por sorpresa.
+* El recuento y el borrado tienen que decir **lo mismo**: si el anuncio y el
+  `deleteMany` filtran distinto, el script miente sobre lo que va a hacer.
+
+## Validación
+
+Las expresiones específicas de una entidad pueden estar en:
+
+```text
+entidad.regex.js
+```
+
+Las funciones reutilizables de validación pertenecen a:
+
+```text
+src/utils/regexValidator.js
+```
+
+Las reglas de negocio pertenecen al `service`.
+
+Validar siempre los datos provenientes del cliente.
+
+## Responsabilidades
+
+### Routes
+
+Definen los endpoints y conectan las rutas con los controllers.
+
+### Controllers
+
+Manejan HTTP:
+
+* `req`
+* `res`
+* parámetros
+* body
+* respuestas
+
+No contienen lógica de negocio compleja.
+
+### Services
+
+Contienen la lógica de negocio y coordinan las operaciones necesarias.
+
+### Models / ORM
+
+Manejan la persistencia cuando sea necesario.
+
+### Middleware
+
+Contiene comportamientos transversales como autenticación, CORS y registro de
+peticiones. Solo lo que se use en más de un sitio o en toda la aplicación.
+
+### Docs
+
+Contiene el documento OpenAPI y su interfaz. No contiene lógica de negocio.
+
+### Utils
+
+Contiene funciones realmente reutilizables, como:
+
+* manejo de errores;
+* validadores;
+* utilidades generales.
+
+## Reglas
+
+* No sobreingeniería.
+* No crear capas sin una necesidad real.
+* No agregar tecnologías sin justificación.
+* Reutilizar código existente.
+* No duplicar lógica.
+* Mantener responsabilidades claras.
+* Usar POO cuando aporte valor.
+* Usar patrones de diseño solamente cuando resuelvan un problema real.
+* Mantener frontend y backend separados.
+* No implementar funcionalidades futuras no solicitadas.
+* Priorizar código fácil de leer, entender y modificar.
+* Toda ruta nueva se documenta en `src/docs/paths/` en el mismo cambio.
+* Ninguna ruta queda sin documentar, y ninguna operación documentada queda sin ruta.
+* Toda protección que se añade tiene su comprobación en las pruebas. Una
+  protección sin comprobar es una protección que no se sabe si funciona.
+
+### Regla principal
+
+**La solución más simple que resuelva correctamente el problema es la solución preferida.**
+
+No crear abstracciones para problemas que todavía no existen.
+
+
+te dejo aparte la informacion del proyecto que necesitas saber 
+
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  CLIENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  HELD
+  RESERVED
+  BLOCKED
+}
+
+enum AppointmentStatus {
+  PENDING
+  COORDINATED
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+enum NotificationChannel {
+  INTERNAL
+  EMAIL
+  WHATSAPP
+}
+
+model Business {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  slug        String   @unique
+  descripcion String?
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users           User[]
+  clients         Client[]
+  categories      Category[]
+  tasks           Task[]
+  availabilities  Availability[]
+  appointments    Appointment[]
+
+  @@index([activo])
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  nombre       String
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(CLIENT)
+  activo       Boolean   @default(true)
+  ultimoAcceso DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  businessId   Int?
+
+  business      Business?           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client        Client?
+  notifications Notification[]
+  events        AppointmentEvent[]
+
+  @@index([role])
+  @@index([businessId])
+}
+
+model Client {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  businessId      Int
+  nombre          String
+  documento       String?
+  fechaNacimiento DateTime?
+  telefono        String?
+  direccion       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  tasks        Task[]
+
+  @@unique([businessId, documento])
+  @@index([nombre])
+  @@index([businessId])
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  businessId  Int
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+}
+
+model Task {
+  id          Int        @id @default(autoincrement())
+  businessId  Int
+  title       String
+  description String?
+  categoryId  Int?
+  clientId    Int?
+  dueDate     DateTime?
+  dueTime     String?
+  status      TaskStatus @default(PENDING)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category     Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  client       Client?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  appointments Appointment[]
+
+  @@index([businessId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([categoryId])
+  @@index([clientId])
+}
+
+model Availability {
+  id         Int                @id @default(autoincrement())
+  businessId Int
+  date       DateTime
+  startTime  String
+  endTime    String
+  status     AvailabilityStatus @default(AVAILABLE)
+  note       String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@unique([businessId, date, startTime])
+  @@index([businessId])
+  @@index([date])
+  @@index([status])
+}
+
+model Appointment {
+  id             Int               @id @default(autoincrement())
+  businessId     Int
+  taskId         Int
+  clientId       Int
+  availabilityId Int
+  note           String?
+  status         AppointmentStatus @default(PENDING)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  task        Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  client      Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  availability Availability     @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
+  events      AppointmentEvent[]
+  notifications Notification[]
+
+  @@index([businessId])
+  @@index([clientId])
+  @@index([taskId])
+  @@index([availabilityId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AppointmentEvent {
+  id            Int                @id @default(autoincrement())
+  appointmentId Int
+  actorId       Int?
+  fromStatus    AppointmentStatus?
+  toStatus      AppointmentStatus
+  note          String?
+  createdAt     DateTime           @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  // Quién hizo el cambio. onDelete: SetNull y no Cascade a propósito: si se
+  // borrara la cuenta de un administrador, su historial debe seguir ahí con
+  // actor = null en lugar de desaparecer con él.
+  actor       User?              @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([appointmentId, createdAt])
+  @@index([actorId])
+}
+
+model Notification {
+  id            Int                 @id @default(autoincrement())
+  userId        Int
+  appointmentId Int?
+  channel       NotificationChannel @default(INTERNAL)
+  type          String
+  title         String
+  message       String
+  readAt        DateTime?
+  createdAt     DateTime            @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+}

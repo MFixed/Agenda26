@@ -1,0 +1,40 @@
+{
+  "name": "citas-api",
+  "version": "1.0.0",
+  "description": "API de gestion de tareas y citas",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node --watch index.js",
+    "start": "node index.js",
+    "seed": "node prisma/seed.js",
+    "db:reset": "node prisma/reset.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "prisma:sqlite:schema": "node scripts/sqlite-schema.mjs",
+    "prisma:sqlite:generate": "npm run prisma:sqlite:schema && prisma generate --schema prisma/schema.sqlite.prisma",
+    "prisma:sqlite:migrate": "npm run prisma:sqlite:schema && prisma migrate dev --schema prisma/schema.sqlite.prisma",
+    "prisma:sqlite:studio": "prisma studio --schema prisma/schema.sqlite.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.1.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.12.1",
+    "resend": "^6.32.1",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "prisma": "^6.1.0"
+  },
+  "allowScripts": {
+    "prisma": true,
+    "@prisma/client": true,
+    "@prisma/engines": true
+  }
+}

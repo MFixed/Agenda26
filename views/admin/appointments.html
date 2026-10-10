@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Citas · Administración</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <script type="module" src="/js/admin/appointments.js"></script>
+  </head>
+  <body data-page="admin-appointments">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="/admin">
+          <span class="brand-mark" aria-hidden="true">G</span>
+          <span><strong>Gestión</strong><small>Administración</small></span>
+        </a>
+        <nav class="nav-links" aria-label="Navegación principal">
+          <a href="/admin">Panel</a>
+          <a class="active" href="/admin/citas">Citas</a>
+          <a href="/admin/calendario">Calendario</a>
+          <a href="/admin/tareas">Tareas</a>
+          <a href="/admin/clientes">Clientes</a>
+        </nav>
+        <div class="topbar-actions">
+          <span class="badge" id="rol-badge">…</span>
+          <span class="user-chip" id="user-name">…</span>
+          <button class="button button-quiet button-sm" id="logout-button" type="button">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Administración</p>
+          <h1>Citas</h1>
+          <p class="muted">Filtra por estado, revisa el detalle y resuelve. Cada cambio avisa al cliente. Las citas nuevas se crean desde el panel principal.</p>
+        </div>
+      </section>
+
+      <section class="stats-grid" aria-label="Resumen">
+        <article class="stat-card stat-card--warning"><span>Pendientes</span><strong id="stat-pendientes">—</strong></article>
+        <article class="stat-card stat-card--success"><span>Coordinadas</span><strong id="stat-coordinadas">—</strong></article>
+        <article class="stat-card"><span>Completadas</span><strong id="stat-completadas">—</strong></article>
+        <article class="stat-card"><span>Canceladas / rechazadas</span><strong id="stat-cerradas">—</strong></article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Cola de trabajo</p>
+            <h2>Citas por confirmar</h2>
+          </div>
+          <span class="count-badge" id="pendientes-total">—</span>
+        </div>
+        <div class="stack-list" id="lista-pendientes">
+          <p class="muted">Cargando…</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Todas las citas</p>
+            <h2>Listado</h2>
+          </div>
+          <span class="count-badge" id="listado-total">—</span>
+        </div>
+
+        <div class="toolbar">
+          <label class="search-field">
+            <span class="sr-only">Buscar citas</span>
+            <input id="buscar" type="search" placeholder="Buscar por cliente o servicio" autocomplete="off">
+          </label>
+          <label class="select-field">
+            <span class="sr-only">Filtrar por estado</span>
+            <select id="filtro-estado">
+              <option value="">Todos los estados</option>
+              <option value="PENDING">Pendientes</option>
+              <option value="COORDINATED">Coordinadas</option>
+              <option value="COMPLETED">Completadas</option>
+              <option value="CANCELLED">Canceladas</option>
+              <option value="REJECTED">Rechazadas</option>
+            </select>
+          </label>
+          <label class="select-field">
+            <span class="sr-only">Filtrar por cliente</span>
+            <select id="filtro-cliente">
+              <option value="">Todos los clientes</option>
+            </select>
+          </label>
+          <button class="button button-quiet button-sm" id="recargar" type="button">Recargar</button>
+        </div>
+
+        <div class="stack-list" id="lista-citas"><p class="muted">Cargando…</p></div>
+        <div class="pager" id="pager" hidden>
+          <span class="pager-info" id="pager-info">—</span>
+          <div class="hero-actions">
+            <button class="button button-quiet button-sm" id="pager-anterior" type="button">Anterior</button>
+            <button class="button button-quiet button-sm" id="pager-siguiente" type="button">Siguiente</button>
+          </div>
+        </div>
+        <p class="message" id="lista-message" role="status"></p>
+      </section>
+    </main>
+
+    <dialog class="modal" id="detalle-dialog" aria-labelledby="detalle-title"></dialog>
+    <dialog class="modal confirm-modal" id="confirm-dialog" aria-labelledby="confirm-title">
+      <div class="confirm-inner">
+        <div class="modal-heading">
+          <h2 id="confirm-title">Confirmar</h2>
+          <button class="icon-button" id="close-confirm" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <p class="confirm-text" id="confirm-text"></p>
+        <p class="confirm-warn" id="confirm-aviso"></p>
+        <p class="message" id="confirm-message" role="status"></p>
+        <div class="modal-actions">
+          <button class="button button-quiet" id="cancel-confirm" type="button">Cancelar</button>
+          <button class="button button-danger" id="accept-confirm" type="button">Aceptar</button>
+        </div>
+      </div>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>
