@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#2f57d4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d131d" media="(prefers-color-scheme: dark)" />
+    <title>Tareas · Administración</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script>
+      /* Se aplica el tema ANTES de pintar. Si se hiciera en el modulo, un
+         visitante en oscuro veria un destello blanco mientras espera al /me. */
+      (function () {
+        try {
+          var t = localStorage.getItem('agenda26_tema') || 'auto';
+          if (t !== 'auto') document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          /* Modo privado sin localStorage: se queda el tema del sistema. */
+        }
+      })();
+    </script>
+
+    <script type="module" src="/js/admin/tasks.js"></script>
+  </head>
+  <body data-page="admin-tasks">
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <a class="brand" href="/admin">
+            <span class="brand-mark" aria-hidden="true">A</span>
+            <span class="brand-text"><strong data-marca-negocio>Agenda26</strong><small>Administración</small></span>
+          </a>
+        </div>
+        <nav class="sidebar-nav" id="sidebar-nav" aria-label="Navegación principal"></nav>
+        <div class="sidebar-foot">
+          <span class="badge" data-insignia-rol></span>
+          <span class="user-chip" data-nombre-usuario></span>
+          <button class="btn btn-quiet btn-block" data-salir type="button" style="margin-top: 0.5rem">Salir</button>
+        </div>
+      </aside>
+
+      <div>
+        <header class="app-header">
+          <div class="app-header-inner">
+            <a class="brand" href="/admin">
+              <span class="brand-mark" aria-hidden="true">A</span>
+              <span class="brand-text"><strong data-subtitulo-negocio>Agenda26</strong></span>
+            </a>
+            <div class="header-actions">
+              <span class="badge" data-insignia-rol></span>
+              <span class="user-chip" data-nombre-usuario></span>
+              <button class="btn btn-quiet btn-sm" data-salir type="button">Salir</button>
+            </div>
+          </div>
+        </header>
+
+        <main class="app-content" id="contenido">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">Administración</p>
+              <h1>Tareas</h1>
+              <p class="lead">
+                Una tarea puede existir sin fecha, sin cliente y sin cita. <span class="mono">NULL</span> significa eso,
+                no una fecha inventada.
+              </p>
+            </div>
+            <div class="page-actions">
+              <button class="btn btn-primary" id="nueva-tarea" type="button">+ Nueva tarea</button>
+            </div>
+          </section>
+
+          <section class="stats-grid" aria-label="Resumen">
+            <article class="stat-card"><span>Total</span><strong id="stat-total">—</strong></article>
+            <article class="stat-card stat-card--warning">
+              <span>Sin fecha</span><strong id="stat-sin-fecha">—</strong>
+            </article>
+            <article class="stat-card stat-card--info">
+              <span>Pendientes</span><strong id="stat-pendientes">—</strong>
+            </article>
+            <article class="stat-card stat-card--success">
+              <span>Completadas</span><strong id="stat-completadas">—</strong>
+            </article>
+          </section>
+
+          <section class="panel">
+            <div class="toolbar">
+              <label class="field">
+                <span class="sr-only">Buscar tareas</span>
+                <input id="buscar" type="search" placeholder="Buscar por título" autocomplete="off" />
+              </label>
+
+              <label class="field">
+                <span class="sr-only">Filtrar por estado</span>
+                <select id="filtro-estado">
+                  <option value="">Todos los estados</option>
+                  <option value="PENDING">Pendiente</option>
+                  <option value="IN_PROGRESS">En curso</option>
+                  <option value="COMPLETED">Completada</option>
+                  <option value="CANCELLED">Cancelada</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="sr-only">Filtrar por categoría</span>
+                <select id="filtro-categoria">
+                  <option value="">Todas las categorías</option>
+                </select>
+              </label>
+
+              <div class="toolbar-actions">
+                <button class="btn btn-quiet btn-sm" id="recargar" type="button">Recargar</button>
+                <button class="btn btn-quiet btn-sm" id="gestionar-categorias" type="button">Categorías</button>
+              </div>
+            </div>
+
+            <nav class="tabs" aria-label="Vistas de tareas">
+              <a class="tab" href="/admin/tareas?vista=propias">Mis tareas</a>
+              <a class="tab" href="/admin/tareas?vista=agendadas">Agendadas</a>
+              <a class="tab" href="/admin/tareas?vista=sin-fecha">Sin fecha</a>
+              <a class="tab" href="/admin/tareas?vista=de-citas">De citas</a>
+              <a class="tab" href="/admin/tareas?vista=todas">Todas</a>
+            </nav>
+
+            <p class="note note--warn" id="ocultas" hidden>
+              <span></span>
+              <a class="btn btn-quiet btn-sm" href="/admin/tareas?vista=de-citas" style="margin-top: 0.5rem">Verlas</a>
+            </p>
+
+            <div class="stack-list" id="lista-tareas">
+              <div class="skeleton skeleton-card"></div>
+              <div class="skeleton skeleton-card"></div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <nav class="tabbar" id="tabbar" aria-label="Navegación principal"></nav>
+
+    <dialog class="modal" id="tarea-dialog" aria-labelledby="tarea-dialog-title">
+      <form id="tarea-form" method="post" novalidate>
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Tarea</p>
+            <h2 id="tarea-dialog-title">Nueva tarea</h2>
+          </div>
+          <button class="icon-btn" type="button" data-cerrar-dialogo aria-label="Cerrar">×</button>
+        </div>
+
+        <input id="tarea-id" type="hidden" />
+
+        <div class="form-grid">
+          <label class="field field-wide">
+            <span>Título *</span>
+            <input
+              id="tarea-titulo"
+              name="title"
+              type="text"
+              maxlength="160"
+              placeholder="Comprar materiales"
+              required
+            />
+          </label>
+
+          <label class="field field-wide">
+            <span>Descripción</span>
+            <textarea id="tarea-descripcion" name="description" rows="3" maxlength="2000"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Categoría</span>
+            <select id="tarea-categoria" name="categoryId"></select>
+          </label>
+
+          <label class="field">
+            <span>Cliente</span>
+            <select id="tarea-cliente" name="clientId"></select>
+          </label>
+
+          <label class="field">
+            <span>Fecha</span>
+            <input id="tarea-fecha" name="dueDate" type="date" />
+            <small>Vacío = tarea sin fecha.</small>
+          </label>
+
+          <label class="field">
+            <span>Hora</span>
+            <input id="tarea-hora" name="dueTime" type="time" />
+          </label>
+
+          <label class="field field-wide">
+            <span>Estado</span>
+            <select id="tarea-estado" name="status">
+              <option value="PENDING">Pendiente</option>
+              <option value="IN_PROGRESS">En curso</option>
+              <option value="COMPLETED">Completada</option>
+              <option value="CANCELLED">Cancelada</option>
+            </select>
+          </label>
+        </div>
+
+        <p class="form-error" id="tarea-error" role="alert" hidden></p>
+
+        <div class="modal-actions">
+          <button class="btn btn-quiet" type="button" data-cerrar-dialogo>Cancelar</button>
+          <button class="btn btn-primary" type="submit">Guardar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="categoria-dialog" aria-labelledby="categoria-dialog-title">
+      <form id="categoria-form" method="post" novalidate>
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Categorías</p>
+            <h2 id="categoria-dialog-title">Nueva categoría</h2>
+          </div>
+          <button class="icon-btn" type="button" data-cerrar-dialogo aria-label="Cerrar">×</button>
+        </div>
+
+        <input id="categoria-id" type="hidden" />
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Nombre *</span>
+            <input id="categoria-nombre" name="name" type="text" maxlength="40" placeholder="SERVICIOS" required />
+          </label>
+
+          <label class="field">
+            <span>Duración por defecto</span>
+            <input
+              id="categoria-duracion"
+              name="durationMin"
+              type="number"
+              min="5"
+              max="480"
+              step="5"
+              placeholder="60"
+            />
+            <small>Minutos. Se usa al crear una cita de esta categoría.</small>
+          </label>
+
+          <label class="field">
+            <span>Precio</span>
+            <input id="categoria-precio" name="precio" type="number" min="0" step="0.01" placeholder="0.00" />
+          </label>
+
+          <label class="field">
+            <span>Color</span>
+            <input id="categoria-color" name="color" type="color" value="#2f57d4" />
+            <small>Se usa en el calendario.</small>
+          </label>
+
+          <label class="field field-wide">
+            <span>Descripción</span>
+            <textarea id="categoria-descripcion" name="description" rows="2" maxlength="240"></textarea>
+          </label>
+
+          <label class="check-field field-wide">
+            <input id="categoria-activo" name="activo" type="checkbox" checked />
+            <span>Categoría activa (se puede elegir al reservar)</span>
+          </label>
+        </div>
+
+        <p class="form-error" id="categoria-error" role="alert" hidden></p>
+
+        <div class="modal-actions">
+          <button class="btn btn-danger" id="borrar-categoria" type="button">Eliminar</button>
+          <span class="spacer"></span>
+          <button class="btn btn-quiet" type="button" data-cerrar-dialogo>Cancelar</button>
+          <button class="btn btn-primary" type="submit">Guardar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Listado de categorías para elegir cuál editar. -->
+    <dialog class="modal" id="categorias-dialog" aria-labelledby="categorias-title">
+      <div class="modal-body" id="categorias-lista"></div>
+    </dialog>
+
+    <dialog class="modal" id="detalle-dialog" aria-labelledby="detalle-title"></dialog>
+  </body>
+</html>

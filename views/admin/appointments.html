@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#2f57d4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d131d" media="(prefers-color-scheme: dark)" />
+    <title>Citas · Administración</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script>
+      /* Se aplica el tema ANTES de pintar. Si se hiciera en el modulo, un
+         visitante en oscuro veria un destello blanco mientras espera al /me. */
+      (function () {
+        try {
+          var t = localStorage.getItem('agenda26_tema') || 'auto';
+          if (t !== 'auto') document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          /* Modo privado sin localStorage: se queda el tema del sistema. */
+        }
+      })();
+    </script>
+
+    <script type="module" src="/js/admin/appointments.js"></script>
+  </head>
+  <body data-page="admin-appointments">
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <a class="brand" href="/admin">
+            <span class="brand-mark" aria-hidden="true">A</span>
+            <span class="brand-text"><strong data-marca-negocio>Agenda26</strong><small>Administración</small></span>
+          </a>
+        </div>
+        <nav class="sidebar-nav" id="sidebar-nav" aria-label="Navegación principal"></nav>
+        <div class="sidebar-foot">
+          <span class="badge" data-insignia-rol></span>
+          <span class="user-chip" data-nombre-usuario></span>
+          <button class="btn btn-quiet btn-block" data-salir type="button" style="margin-top: 0.5rem">Salir</button>
+        </div>
+      </aside>
+
+      <div>
+        <header class="app-header">
+          <div class="app-header-inner">
+            <a class="brand" href="/admin">
+              <span class="brand-mark" aria-hidden="true">A</span>
+              <span class="brand-text"><strong data-subtitulo-negocio>Agenda26</strong></span>
+            </a>
+            <div class="header-actions">
+              <span class="badge" data-insignia-rol></span>
+              <span class="user-chip" data-nombre-usuario></span>
+              <button class="btn btn-quiet btn-sm" data-salir type="button">Salir</button>
+            </div>
+          </div>
+        </header>
+
+        <main class="app-content" id="contenido">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">Administración</p>
+              <h1>Citas</h1>
+              <p class="lead">
+                Filtra por estado, revisa el detalle y resuelve. Cada cambio avisa al cliente. Las citas nuevas se crean
+                desde el panel principal.
+              </p>
+            </div>
+          </section>
+
+          <section class="stats-grid" aria-label="Resumen">
+            <article class="stat-card stat-card--warning">
+              <span>Pendientes</span><strong id="stat-pendientes">—</strong>
+            </article>
+            <article class="stat-card stat-card--success">
+              <span>Coordinadas</span><strong id="stat-coordinadas">—</strong>
+            </article>
+            <article class="stat-card"><span>Completadas</span><strong id="stat-completadas">—</strong></article>
+            <article class="stat-card">
+              <span>Canceladas / rechazadas</span><strong id="stat-cerradas">—</strong>
+            </article>
+          </section>
+
+          <section class="panel" style="margin-bottom: 1rem">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Cola de trabajo</p>
+                <h2>Citas por confirmar</h2>
+              </div>
+              <span class="pill status-pending" id="pendientes-total">—</span>
+            </div>
+            <div class="stack-list" id="lista-pendientes">
+              <div class="skeleton skeleton-card"></div>
+              <div class="skeleton skeleton-card"></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Todas las citas</p>
+                <h2>Listado</h2>
+              </div>
+              <span class="pill status-off" id="listado-total">—</span>
+            </div>
+
+            <div class="toolbar">
+              <label class="field">
+                <span class="sr-only">Buscar citas</span>
+                <input id="buscar" type="search" placeholder="Buscar por cliente o servicio" autocomplete="off" />
+              </label>
+
+              <label class="field">
+                <span class="sr-only">Filtrar por estado</span>
+                <select id="filtro-estado">
+                  <option value="">Todos los estados</option>
+                  <option value="PENDING">Pendientes</option>
+                  <option value="COORDINATED">Coordinadas</option>
+                  <option value="COMPLETED">Completadas</option>
+                  <option value="CANCELLED">Canceladas</option>
+                  <option value="REJECTED">Rechazadas</option>
+                  <option value="NO_SHOW">No asistieron</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="sr-only">Filtrar por cliente</span>
+                <select id="filtro-cliente">
+                  <option value="">Todos los clientes</option>
+                </select>
+              </label>
+
+              <div class="toolbar-actions">
+                <button class="btn btn-quiet btn-sm" id="recargar" type="button">Recargar</button>
+              </div>
+            </div>
+
+            <div class="stack-list" id="lista-citas">
+              <div class="skeleton skeleton-card"></div>
+              <div class="skeleton skeleton-card"></div>
+            </div>
+
+            <div class="pager" id="pager" hidden>
+              <span class="pager-info" id="pager-info">—</span>
+              <div class="toolbar-actions">
+                <button class="btn btn-quiet btn-sm" id="pager-anterior" type="button">Anterior</button>
+                <button class="btn btn-quiet btn-sm" id="pager-siguiente" type="button">Siguiente</button>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <nav class="tabbar" id="tabbar" aria-label="Navegación principal"></nav>
+
+    <dialog class="modal" id="detalle-dialog" aria-labelledby="detalle-title"></dialog>
+    <!-- Cambio de horario: la lista de huecos libres se pinta al abrir. -->
+    <dialog class="modal" id="reprogramar-dialog" aria-labelledby="reprogramar-title"></dialog>
+  </body>
+</html>
