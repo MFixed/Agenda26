@@ -1,0 +1,598 @@
+// Agenda26 v2 · Esquema SQLite3.
+//
+// v2 sobre v1, con las limitaciones de SQLite tenidas en cuenta:
+//
+//  - Los ENUM de la v1 PostgreSQL son `String` aqui. SQLite no los tiene y Prisma no
+//    los emula; quien valida es el codigo (`validateOneOf` en cada `.validation.js`),
+//    que es donde ya estaba.
+//  - `Json` pasa a `String`. Se serializa en `utils/audit.js`.
+//  - `Decimal` pasa a `Float`. SQLite no tiene decimal exacto y un Float es
+//    suficiente para un precio de referencia que no se cobra.
+//
+// Lo que SI se mantiene, y es lo importante:
+//
+//  - El indice UNIQUE PARCIAL que impide el doble booking. SQLite lo soporta
+//    (desde 3.8.0, 2013) y funciona exactamente igual que en PostgreSQL.
+//
+// Este archivo es el UNICO esquema. No hay `schema.sqlite.prisma` generado: con una
+// sola base no hay nada que convertir, y mantener dos ficheros sincronizados a mano
+// es la forma mas rapida de desplegar un esquema que no existe.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enumeraciones (validadas en el codigo, no por la base)
+// ---------------------------------------------------------------------------
+
+// Role: SUPERADMIN | ADMIN | STAFF | CLIENT
+// TaskStatus: PENDING | IN_PROGRESS | COMPLETED | CANCELLED
+// AvailabilityStatus: AVAILABLE | HELD | RESERVED | BLOCKED
+// AppointmentStatus: PENDING | COORDINATED | COMPLETED | CANCELLED | REJECTED | NO_SHOW
+// NotificationChannel: INTERNAL | EMAIL | WHATSAPP
+// ReminderChannel: EMAIL | WHATSAPP
+// ReminderStatus: PENDING | SENT | FAILED | CANCELLED
+// WaitlistStatus: WAITING | NOTIFIED | EXPIRED | CANCELLED
+
+// ---------------------------------------------------------------------------
+// Nucleo: empresa, cuentas y permisos
+// ---------------------------------------------------------------------------
+
+model Business {
+  id          Int     @id @default(autoincrement())
+  nombre      String
+  slug        String  @unique
+  descripcion String?
+  activo      Boolean @default(true)
+  deletedAt   DateTime?
+
+  /// Zona IANA del negocio (America/Montevideo). La agenda se lee en esta zona, no
+  /// en la del servidor: sin esto, "hoy" se corre un dia al otro lado del mundo.
+  timezone String @default("UTC")
+
+  /// Minutos de margen entre bloque y bloque. Limpieza, desplazamiento, notas.
+  bufferMin Int @default(0)
+
+  /// Duracion por defecto de un bloque cuando se genera la agenda.
+  slotMinutes Int @default(60)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  clients        Client[]
+  categories     Category[]
+  tasks          Task[]
+  availabilities Availability[]
+  appointments   Appointment[]
+  staff          Staff[]
+  schedules      BusinessSchedule[]
+  waitlist       WaitlistEntry[]
+  auditLogs      AuditLog[]
+  settings       BusinessSettings?
+
+  @@index([activo])
+  @@index([deletedAt])
+}
+
+model BusinessSettings {
+  id         Int    @id @default(autoincrement())
+  businessId Int    @unique
+
+  /// Ventana de retencion de un hueco HELD, en minutos.
+  holdMinutes Int @default(10)
+
+  /// Horas de antelacion de los recordatorios, en minutos antes de la cita.
+  reminderBeforeMin Int @default(1440)
+
+  remindersEnabled Boolean @default(true)
+  emailEnabled     Boolean @default(true)
+  whatsappEnabled  Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id           Int     @id @default(autoincrement())
+  nombre       String
+  email        String  @unique
+  passwordHash String
+  role         String  @default("CLIENT")
+  activo       Boolean @default(true)
+  ultimoAcceso DateTime?
+
+  /// Version del token de sesion. Va dentro del JWT y se compara en cada peticion:
+  /// al incrementarla, todos los tokens emitidos dejan de valer. Es lo que hace que
+  /// cerrar sesion y cambiar la contrasena expulsen de verdad, sin lista de
+  /// revocados en memoria ni en Redis.
+  tokenVersion Int @default(0)
+
+  /// El alta es provisional hasta que se confirma el correo.
+  emailVerifiedAt DateTime?
+  deletedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  businessId Int?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  client            Client?
+  staff             Staff?
+  notifications     Notification[]
+  events            AppointmentEvent[]
+  refreshTokens     RefreshToken[]
+  passwordResets    PasswordResetToken[]
+  reminders         Reminder[]      @relation("ReminderStaff")
+  auditLogs         AuditLog[]
+  remindersCreated  Reminder[]      @relation("ReminderCreator")
+  heldAvailabilities Availability[] @relation("AvailabilityHeldBy")
+  settings          UserSettings?
+
+  @@index([role])
+  @@index([businessId])
+  @@index([deletedAt])
+}
+
+model UserSettings {
+  id     Int @id @default(autoincrement())
+  userId Int @unique
+
+  /// Un CLIENT puede apagar los correos. Los avisos internos no se apagan: son el
+  /// historial de lo que le pasa a sus citas.
+  emailOptIn Boolean @default(true)
+  locale     String  @default("es")
+  timezone   String?
+  theme      String  @default("system")
+
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Tokens de refresco, guardados HASHEADOS: si alguien lee la tabla no puede
+/// Presentarlos como sesion valida. El token en claro solo existe en la respuesta.
+model RefreshToken {
+  id Int @id @default(autoincrement())
+  userId Int
+
+  /// SHA-256 del token.
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  /// Dispositivo, para poder listar y revocar sesiones concretas.
+  userAgent String?
+  ip        String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+/// Recuperacion de contrasena. Un solo uso: `usedAt` se rellena al gastarlo.
+model PasswordResetToken {
+  id        Int    @id @default(autoincrement())
+  userId    Int
+  tokenHash String @unique
+
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  /// A que email se aviso, por si el usuario cambio de direccion entre pedirlo y
+  /// usar el enlace.
+  requestedEmail String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Clients
+// ---------------------------------------------------------------------------
+
+model Client {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @unique
+  businessId      Int
+  nombre          String
+  documento       String?
+  fechaNacimiento DateTime?
+  telefono        String?
+  direccion       String?
+  deletedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  profile      ClientProfile?
+  appointments Appointment[]
+  tasks        Task[]
+  waitlist     WaitlistEntry[]
+
+  @@unique([businessId, documento])
+  @@index([nombre])
+  @@index([businessId])
+  @@index([businessId, deletedAt])
+}
+
+/// Ficha del cliente que consulta el propio frontend (sin datos de la cuenta).
+/// Permite consentimientos y preferencias sin ensuciar la ficha operativa.
+model ClientProfile {
+  id       Int @id @default(autoincrement())
+  clientId Int @unique
+
+  notas            String?
+  aceptaMarketing  Boolean  @default(false)
+  consentimientoAt DateTime?
+  exportadoEn      DateTime?
+
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Catalogo y agenda
+// ---------------------------------------------------------------------------
+
+model Category {
+  id          Int     @id @default(autoincrement())
+  businessId  Int
+  name        String
+  description String?
+  deletedAt   DateTime?
+
+  /// Duracion del servicio en minutos. Decide cuanto ocupa en la agenda: sin esto,
+  /// un servicio de 15min y otro de 2h ocupan el mismo bloque.
+  durationMin Int @default(60)
+
+  /// Color del calendario. Hex, para pintar la rejilla sin pedirlo a cada cita.
+  color String? @default("#2563eb")
+
+  /// Precio de referencia. No se cobra: es para informes.
+  precio Float?
+
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+  waitlist WaitlistEntry[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+  @@index([businessId, deletedAt])
+}
+
+/// Profesional que da citas. Necesario cuando hay mas de una persona: sin esto una
+/// cita pertenece a la empresa y no se puede saber con quien.
+model Staff {
+  id         Int     @id @default(autoincrement())
+  businessId Int
+  userId     Int?    @unique
+
+  nombre        String
+  email         String?
+  telefono      String?
+  especialidad  String?
+  color         String?   @default("#0891b2")
+  activo        Boolean   @default(true)
+  deletedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user           User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  appointments   Appointment[]
+  availabilities Availability[]
+  schedules      BusinessSchedule[]
+
+  @@index([businessId])
+  @@index([businessId, deletedAt])
+}
+
+/// Agenda recurrente: "los lunes de 09:00 a 18:00, bloques de 60".
+/// Es la plantilla desde la que se materializan los bloques concretos.
+model BusinessSchedule {
+  id         Int    @id @default(autoincrement())
+  businessId Int
+
+  /// 0 = domingo ... 6 = sabado. Sigue la convencion de Date.getDay().
+  weekday Int
+
+  startTime   String
+  endTime     String
+  slotMinutes Int     @default(60)
+  note        String?
+  activo      Boolean @default(true)
+
+  staffId Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  staff    Staff?   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, weekday, activo])
+}
+
+model Availability {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  date       DateTime
+  startTime  String
+  endTime    String
+  status     String   @default("AVAILABLE")
+  note       String?
+
+  /// Retencion temporal: el hueco queda HELD hasta este instante. Pasado, el worker
+  /// lo devuelve a AVAILABLE. Es lo que evita que dos clientes se peleen un bloque
+  /// a la vez durante el formulario de reserva.
+  heldUntil DateTime?
+  heldById  Int?
+
+  staffId   Int?
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business     Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  staff        Staff?         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  heldBy       User?          @relation("AvailabilityHeldBy", fields: [heldById], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([date])
+  @@index([status])
+  /// El filtro por defecto del listado es negocio + estado + rango de fechas.
+  @@index([businessId, status, date])
+  @@index([heldUntil])
+  @@index([deletedAt])
+  // Indice UNIQUE de EXPRESION: no duplica bloques, y a la vez permite que dos
+  // profesionales distintos tengan bloque a la misma hora. Prisma no lo expresa,
+  // asi que vive solo en `migrations/0001_init/migration.sql`.
+  //
+  // ESTA MISMA LINEA COMENTADA TIENE QUE ESTAR AQUI. Sin ella, el siguiente
+  // `migrate dev` da el indice por borrado y lo suelta con un DROP.
+  //
+  //   CREATE UNIQUE INDEX "Availability_businessId_staffId_date_startTime_key"
+  //     ON "Availability"("businessId", COALESCE("staffId", 0), "date", "startTime");
+}
+
+model Task {
+  id          Int       @id @default(autoincrement())
+  businessId  Int
+  title       String
+  description String?
+  categoryId  Int?
+  clientId    Int?
+  dueDate     DateTime?
+  dueTime     String?
+  status      String    @default("PENDING")
+  deletedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  client       Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  appointments Appointment[]
+
+  @@index([businessId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([categoryId])
+  @@index([clientId])
+  @@index([businessId, deletedAt])
+}
+
+model Appointment {
+  id             Int      @id @default(autoincrement())
+  businessId     Int
+  taskId         Int
+  clientId       Int
+  availabilityId Int
+  staffId        Int?
+  note           String?
+  status         String   @default("PENDING")
+  deletedAt      DateTime?
+
+  /// Por que se cancelo o rechazo. Texto libre pero explicito: las metricas de
+  /// "motivo mas comun de cancelacion" salen de aqui.
+  cancelReason String?
+
+  /// Check-in en la sala de espera.
+  checkedInAt DateTime?
+
+  /// Version optimista. Sube en cada escritura; un update lo lleva para que dos
+  /// administradores no se pisen sobre la misma cita.
+  version Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  task          Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  client        Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  availability  Availability        @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
+  staff         Staff?              @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  events        AppointmentEvent[]
+  notifications Notification[]
+  reminders     Reminder[]
+
+  @@index([businessId])
+  @@index([clientId])
+  @@index([taskId])
+  @@index([availabilityId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([availabilityId, status])
+  @@index([businessId, deletedAt])
+  @@index([staffId])
+  // Indice UNIQUE PARCIAL que impide el doble booking. Prisma no lo expresa, asi
+  // que vive solo en `migrations/0001_init/migration.sql` (SQLite lo soporta
+  // desde 3.8, 2013).
+  //
+  // ESTA MISMA LINEA COMENTADA TIENE QUE ESTAR AQUI. Prisma compara el esquema
+  // con la base ignorando los comentarios, pero las migraciones las escribe
+  // comparando el estado de la base con el del archivo: sin esta linea, el
+  // siguiente `migrate dev` no ve el indice, lo da por borrado y genera un
+  // `DROP INDEX "Appointment_hueco_vivo_key"`. Con el indice caido, la unica
+  // proteccion contra dos citas en el mismo bloque pasa a ser el `assertHuecoLibre`
+  // de `appointment.service.js`, que es una lectura previa y por lo tanto no
+  // protege bajo concurrencia. Es la garantia de integridad de todo el modulo.
+  //
+  //   CREATE UNIQUE INDEX "Appointment_hueco_vivo_key"
+  //     ON "Appointment"("availabilityId")
+  //     WHERE "status" IN ('PENDING', 'COORDINATED') AND "deletedAt" IS NULL;
+}
+
+/// Historial de estados. Append-only: no se edita ni se borra nunca.
+model AppointmentEvent {
+  id            Int      @id @default(autoincrement())
+  appointmentId Int
+  actorId       Int?
+  fromStatus    String?
+  toStatus      String
+  note          String?
+  createdAt     DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  /// SET NULL y no CASCADE a proposito: si se borrara la cuenta de un
+  /// administrador, su historial debe seguir ahi con actor = null.
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([appointmentId, createdAt])
+  @@index([actorId])
+}
+
+model Notification {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  appointmentId Int?
+  channel       String   @default("INTERNAL")
+  type          String
+  title         String
+  message       String
+  readAt        DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@index([userId, deletedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Recordatorios, lista de espera y auditoria
+// ---------------------------------------------------------------------------
+
+/// Aviso programado. Lo crea el worker, no la peticion: pedir una cita no debe
+/// escribir N filas de recordatorio en la transaccion de la reserva.
+model Reminder {
+  id            Int      @id @default(autoincrement())
+  appointmentId Int
+  channel       String
+  status        String   @default("PENDING")
+
+  /// Cuando hay que enviarlo.
+  scheduledFor DateTime
+  sentAt       DateTime?
+  attempts     Int       @default(0)
+  lastError    String?
+
+  createdAt DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  /// Se copia el id del usuario que pidio el aviso, para poder auditarlo.
+  staffId     Int?
+  staff       User?   @relation("ReminderStaff", fields: [staffId], references: [id], onDelete: SetNull)
+
+  createdById Int?
+  createdBy   User?   @relation("ReminderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledFor])
+  @@index([appointmentId])
+}
+
+/// Espera por un hueco que no habia. Cuando se libera uno, el worker avisa.
+model WaitlistEntry {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  clientId   Int
+  categoryId Int?
+  staffId    Int?
+
+  dateFrom DateTime
+  dateTo   DateTime?
+  note     String?
+  status   String    @default("WAITING")
+
+  notifiedAt DateTime?
+  expiresAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, status])
+  @@index([clientId])
+}
+
+/// Rastro de quien toco que. Solo lectura: no hay endpoint para escribirla a mano ni
+/// para borrarla.
+///
+/// `payload` es TEXT con el JSON serializado, no una columna JSON: SQLite no tiene
+/// ese tipo. Se serializa en `utils/audit.js`.
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  businessId Int?
+  actorId    Int?
+
+  /// Verbo: create | update | delete | login | logout | password_reset | ...
+  action   String
+  entity   String
+  entityId Int?
+  payload  String?
+  ip       String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  business Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor    User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([entity, entityId])
+}

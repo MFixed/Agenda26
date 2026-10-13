@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Agenda26: gestión de citas, tareas y clientes" />
+    <meta name="theme-color" content="#2f57d4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d131d" media="(prefers-color-scheme: dark)" />
+    <title>Agenda26 · Gestión de citas</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script>
+      /* Se aplica el tema ANTES de pintar. Si se hiciera en el modulo, un
+         visitante en oscuro veria un destello blanco mientras espera al /me. */
+      (function () {
+        try {
+          var t = localStorage.getItem('agenda26_tema') || 'auto';
+          if (t !== 'auto') document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          /* Modo privado sin localStorage: se queda el tema del sistema. */
+        }
+      })();
+    </script>
+  </head>
+  <body class="auth-page" data-page="inicio">
+    <main class="auth-shell">
+      <a class="brand auth-brand" href="/">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span class="brand-text"><strong>Agenda26</strong><small>Citas, tareas y clientes</small></span>
+      </a>
+
+      <section class="auth-card">
+        <p class="eyebrow">Bienvenido</p>
+        <h1 id="inicio-titulo">Elige tu negocio</h1>
+        <p class="muted" id="inicio-texto">Cada empresa tiene su propia puerta. Elige la tuya para entrar.</p>
+
+        <!-- Se rellena con GET /api/negocios: es una ruta publica justamente
+             para que quien aun no ha entrado sea quien puede ver el listado. -->
+        <div class="stack-list" id="lista-negocios">
+          <div class="skeleton skeleton-card"></div>
+          <div class="skeleton skeleton-card"></div>
+        </div>
+
+        <!-- Si el listado falla o el visitante conoce el identificador, este
+             formulario siempre funciona: no depende de ninguna peticion. -->
+        <form id="negocio-form" style="margin-top: 1.25rem">
+          <label class="field">
+            <span>¿No ves tu negocio? Escribe su identificador</span>
+            <input id="negocio-slug" name="slug" type="text" placeholder="tu-negocio" autocomplete="off" required />
+          </label>
+          <button class="btn btn-primary btn-block" type="submit" id="ir-negocio" style="margin-top: 0.75rem">
+            Ir a su acceso
+          </button>
+        </form>
+
+        <p class="auth-switch">
+          <a href="/login">Acceso de la plataforma (superadministrador)</a>
+        </p>
+      </section>
+    </main>
+
+    <script type="module">
+      import { esc, get, haySesion, panelDe } from '/js/api.js';
+
+      const lista = document.querySelector('#lista-negocios');
+      const titulo = document.querySelector('#inicio-titulo');
+      const texto = document.querySelector('#inicio-texto');
+      const formulario = document.querySelector('#negocio-form');
+
+      /* Si ya hay sesion, la portada no tiene nada que ofrecer: se salta al
+         panel. Solo se consulta /me si hay token; sin el, /me responde 401 y
+         el navegador volveria a esta misma pagina en bucle. */
+      if (haySesion()) {
+        get('/api/auth/me')
+          .then((sesion) => {
+            titulo.textContent = `Hola, ${sesion.user.nombre.split(' ')[0]}`;
+            texto.textContent = 'Te llevamos a tu panel…';
+            window.location.replace(panelDe(sesion.user.role));
+          })
+          .catch(() => {});
+      }
+
+      /* Listado publico de negocios. Si falla, el formulario de abajo cubre
+         exactamente el mismo caso: la pagina nunca se queda vacia. */
+      get('/api/negocios')
+        .then((negocios) => {
+          if (!Array.isArray(negocios) || negocios.length === 0) {
+            lista.innerHTML =
+              '<p class="muted">Todavía no hay negocios publicados. Escribe tu identificador abajo.</p>';
+            return;
+          }
+          lista.innerHTML = negocios
+            .map(
+              (negocio) => `
+              <a class="negocio-card" href="/b/${encodeURIComponent(negocio.slug)}/login">
+                <span class="avatar" aria-hidden="true">${esc(negocio.nombre.charAt(0).toUpperCase())}</span>
+                <span class="crece">
+                  <strong>${esc(negocio.nombre)}</strong>
+                  <small>${esc(negocio.descripcion || negocio.slug)}</small>
+                </span>
+                <span class="muted" aria-hidden="true">›</span>
+              </a>`
+            )
+            .join('');
+        })
+        .catch(() => {
+          lista.innerHTML =
+            '<p class="muted">No se pudo cargar el listado de negocios. Puedes escribir el identificador abajo.</p>';
+        });
+
+      formulario.addEventListener('submit', (evento) => {
+        evento.preventDefault();
+        // Se normaliza igual que haria el servidor: espacios a guiones y solo
+        // lo que puede ir en una URL. Escribir "Mi Negocio" no debe fallar.
+        const slug = formulario.slug.value
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, '-')
+          .replace(/[^a-z0-9-]/g, '');
+        if (slug) {
+          window.location.assign(`/b/${slug}/login`);
+        }
+      });
+    </script>
+  </body>
+</html>
